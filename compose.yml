@@ -1,0 +1,52 @@
+name: talleres360-notificaciones
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: notify_db
+      POSTGRES_USER: ${DB_USERNAME:?Configura DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Configura DB_PASSWORD}
+    volumes:
+      - datos_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  notificaciones:
+    build: .
+    image: talleres360/ms-notificaciones:local
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: "8084"
+      SPRING_PROFILES_ACTIVE: postgres
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60"
+      TZ: America/Santiago
+      DB_URL: jdbc:postgresql://postgres:5432/notify_db
+      DB_USERNAME: ${DB_USERNAME:?Configura DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Configura DB_PASSWORD}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Configura INTERNAL_API_KEY}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      RABBIT_ENABLED: ${RABBIT_ENABLED:-false}
+      RABBIT_HOST: ${RABBIT_HOST:-localhost}
+      RABBIT_PORT: ${RABBIT_PORT:-5672}
+      RABBIT_USERNAME: ${RABBIT_USERNAME:-}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD:-}
+      RABBIT_VHOST: ${RABBIT_VHOST:-/}
+      RABBIT_EMAIL_QUEUE: ${RABBIT_EMAIL_QUEUE:-q.cmd.email}
+      RABBIT_WORKSHOP_QUEUE: ${RABBIT_WORKSHOP_QUEUE:-q.cmd.workshop}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  datos_postgres:

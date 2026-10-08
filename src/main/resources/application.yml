@@ -1,0 +1,91 @@
+server:
+  port: ${SERVER_PORT:8084}
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  health:
+    mail:
+      enabled: ${SMTP_ENABLED:false}
+    rabbit:
+      enabled: ${RABBIT_ENABLED:false}
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+spring:
+  application:
+    name: ms-talleres360-notify
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:true}
+      mail.smtp.connectiontimeout: 3000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USERNAME:}
+    password: ${RABBIT_PASSWORD:}
+    virtual-host: ${RABBIT_VHOST:/}
+    listener:
+      simple:
+        auto-startup: ${RABBIT_ENABLED:false}
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+          multiplier: 2
+          max-interval: 10000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+app:
+  internal-key: ${INTERNAL_API_KEY:}
+  smtp:
+    enabled: ${SMTP_ENABLED:false}
+    from: ${SMTP_FROM:}
+  rabbit:
+    enabled: ${RABBIT_ENABLED:false}
+    email-queue: ${RABBIT_EMAIL_QUEUE:q.cmd.email}
+    workshop-queue: ${RABBIT_WORKSHOP_QUEUE:q.cmd.workshop}
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:h2:mem:notifydb;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+---
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+---
+spring:
+  config:
+    activate:
+      on-profile: oracle
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
