@@ -18,7 +18,6 @@ src/main/java/com/talleres360/notificaciones/
 ├── messaging/     Consumidor RabbitMQ.
 └── config/        Credencial interna, errores y documentación OpenAPI.
 src/main/resources/application.yml
-src/test/java/     Pruebas de negocio, HTTP y lectura de mensajes.
 Dockerfile         Construcción por etapas; ejecución con usuario no root.
 compose.yml        Aplicación y PostgreSQL con volumen independiente.
 .env.example       Variables sin credenciales reales.
@@ -49,7 +48,7 @@ Puerto predeterminado: **8084**.
 | GET | `/swagger-ui/index.html` | Documentación interactiva. |
 | GET | `/v3/api-docs` | Especificación OpenAPI. |
 
-Las operaciones de negocio requieren `X-Internal-Key`. La consulta y el reintento también requieren `X-Actor-Role`: `Admin` consulta todo; `Operador` consulta solo tickets y no puede reintentar correos. El tamaño máximo de página es 100 y la numeración comienza en 0.
+Las operaciones de negocio requieren `X-Internal-Key`. La consulta requiere `X-Actor-Role`: `Operador` consulta solo tickets; `Cliente` consulta únicamente correos cuyo destinatario coincide con `X-Customer-Email`, obtenido del token por el BFF. Sin identidad del cliente la consulta se rechaza. Admin no consulta notificaciones por esta API. El reintento Admin es una operación interna de mantenimiento y no tiene ruta pública en el BFF. El tamaño máximo de página es 100 y la numeración comienza en 0.
 
 La respuesta paginada tiene `content`, `page`, `size`, `totalElements` y `totalPages`. No se exponen entidades JPA directamente.
 
@@ -77,7 +76,7 @@ En PowerShell, desde la carpeta del proyecto:
 
 ```powershell
 $env:INTERNAL_API_KEY='una-clave-interna-larga-para-pruebas-locales'
-.\mvnw.cmd test
+.\mvnw.cmd '-DskipTests' package
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -122,10 +121,10 @@ El consumidor procesa JSON desde las dos colas configuradas y confirma la recepc
 
 La entrada HTTP interna permite probarlo sin RabbitMQ. No sustituye la integración de mensajería exigida por el caso. El servicio no inventa destinatarios ni recibe tokens Azure del navegador: el BFF valida al usuario y debe colocar los encabezados internos confiables.
 
-API Gateway debe seguir apuntando al BFF, no directamente a este servicio. Incorporar el servicio al flujo completo implica configurar su destino en el BFF y el productor de comandos en Órdenes. Este repositorio entrega el contrato del consumidor; no modifica esos proyectos ni infraestructura AWS.
+API Gateway sigue apuntando al BFF, no directamente a este servicio. Órdenes prepara comandos durables y los envía por HTTP interno conservando el UUID en cada reintento. El BFF expone `GET /api/notifications`, con la identidad derivada del JWT. Configurar `NOTIFICATIONS_URL=http://IP_PRIVADA:8084` en Órdenes y BFF, junto con la misma clave interna de este servicio. El frontend ofrece tickets al Operador y avisos propios al Cliente. No se han creado ni modificado recursos AWS como parte de esta integración.
 
 ## Seguridad y alcance de las pruebas
 
 No subir `.env`, contraseñas SMTP, claves internas ni archivos PEM. No colocar `X-Internal-Key` en el frontend. Restringir el puerto del microservicio a emisores autorizados y usar TLS cuando la red lo requiera; una clave no cifra HTTP. El servicio confía en el rol transmitido por el BFF junto con la credencial interna, no autentica usuarios Azure por sí mismo.
 
-Las pruebas cubren validaciones, deduplicación, permisos, persistencia de tickets, reintentos SMTP con un proveedor simulado, paginación, OpenAPI, salud y lectura de mensajes. No envían correos reales ni requieren un broker, una EC2 o Docker. La validación con proveedores y motores externos se realiza al configurar esos entornos.
+La revisión local del 8 de octubre verificó validaciones, deduplicación, permisos, tickets, paginación y reintentos con SMTP simulado. No envió correos reales ni verificó un broker o EC2. Los archivos de pruebas no forman parte de esta versión; el empaquetado no sustituye la validación del despliegue.

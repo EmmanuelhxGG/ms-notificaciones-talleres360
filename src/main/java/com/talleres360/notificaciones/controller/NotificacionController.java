@@ -27,11 +27,21 @@ public class NotificacionController {
       @RequestParam(required = false) @Positive Long orderId,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-      @RequestHeader("X-Actor-Role") String role) {
-    if (!role.equals("Admin") && !role.equals("Operador"))
+      @RequestHeader("X-Actor-Role") String role,
+      @RequestHeader(value = "X-Customer-Email", required = false) String correo) {
+    if (!role.equals("Operador") && !role.equals("Cliente"))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    if (role.equals("Cliente") && (correo == null || correo.isBlank()))
       throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     return Pagina.desde(
-        service.listar(orderId, !role.equals("Admin"), page, size).map(NotificacionVista::desde));
+        service
+            .listar(
+                orderId,
+                role.equals("Operador"),
+                role.equals("Cliente") ? correo : null,
+                page,
+                size)
+            .map(NotificacionVista::desde));
   }
 
   @PostMapping("/api/notifications/{id}/retry")
