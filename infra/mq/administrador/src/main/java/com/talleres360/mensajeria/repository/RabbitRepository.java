@@ -51,10 +51,12 @@ public class RabbitRepository {
       if (!(cola.get("consumers") instanceof Number consumidores)
           || consumidores.intValue() != 0)
         throw new IllegalArgumentException("La cola tiene consumidores o no se pudo verificar su uso");
-      // RabbitMQ no admite if-unused al borrar colas quorum. Solo se borran colas demo
-      // vacías, sin consumidores observados; if-empty se comprueba de forma atómica en el broker.
+      if (!(cola.get("messages") instanceof Number mensajes) || mensajes.longValue() != 0)
+        throw new IllegalArgumentException("La cola contiene mensajes o no se pudo verificar su estado");
+      // Quorum no admite if-empty ni if-unused. La comprobación previa NO es atómica:
+      // esta ruta está limitada por el servicio a colas q.demo., nunca a las de negocio.
       condiciones =
-          "?if-empty=true" + ("quorum".equals(cola.get("type")) ? "" : "&if-unused=true");
+          "quorum".equals(cola.get("type")) ? "" : "?if-empty=true&if-unused=true";
     }
     cliente
         .delete()

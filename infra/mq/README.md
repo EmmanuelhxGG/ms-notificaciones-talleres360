@@ -46,6 +46,10 @@ El administrador ofrece GET `queues`, `exchanges`, `nodes`, `bindings`; POST
 `queues`, `exchanges`, `bindings`, `initialize`; DELETE `queues/{nombre}` y
 `exchanges/{nombre}`, bajo `/api/messaging/rabbit`. La eliminación se restringe a
 recursos `q.demo.*` y `cmd.demo.*` para proteger las colas de negocio.
+Antes de eliminar una cola demo se comprueba que no tenga mensajes ni consumidores.
+RabbitMQ no admite las condiciones `if-empty`/`if-unused` para quorum: en ese tipo,
+la comprobación previa no es atómica. No publicar ni consumir en una cola demo
+mientras se elimina. Las colas principales y DLQ no se pueden borrar mediante esta API.
 
 - 5672 y 5673: permitir únicamente los grupos de seguridad de Órdenes y Notificaciones.
 - 8086: permitir únicamente el grupo de seguridad del BFF.
