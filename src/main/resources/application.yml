@@ -17,6 +17,8 @@ management:
     health:
       show-details: never
 spring:
+  flyway:
+    enabled: false
   application:
     name: ms-talleres360-notify
   profiles:
@@ -77,6 +79,11 @@ spring:
   config:
     activate:
       on-profile: postgres
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration/postgresql
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}

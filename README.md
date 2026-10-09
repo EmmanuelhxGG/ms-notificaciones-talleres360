@@ -9,6 +9,10 @@ fallos se conservan en la base de datos. El comprobante de servicio no reemplaza
 una boleta/factura del SII y se descarga mediante
 `GET /api/notifications/{id}/receipt`, previa autorización del BFF y del servicio.
 
+El perfil PostgreSQL incorpora Flyway: adopta la base previa como versión 1 y
+ejecuta `db/migration/postgresql/V2__admitir_comprobantes.sql` para ampliar el CHECK
+de tipos sin borrar datos. H2 y Oracle no ejecutan esa migración PostgreSQL.
+
 ## Tecnologías
 
 Java 21, Spring Boot 3.5.6, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP, JavaMail y OpenAPI. PostgreSQL en Compose, H2 en memoria para desarrollo y pruebas. También incluye el controlador JDBC y un perfil de conexión Oracle.
