@@ -17,12 +17,12 @@ public interface NotificacionRepository
 
   @Query(
       "select n.commandId from Notificacion n where n.estado in :estados and n.proximoIntento <="
-          + " :ahora and (:incluirCorreos = true or n.tipo = :tipoTicket) order by"
+          + " :ahora and (:incluirCorreos = true or n.tipo <> :tipoCorreo) order by"
           + " n.proximoIntento, n.commandId")
   List<String> pendientes(
       Collection<Estado> estados,
       Instant ahora,
       boolean incluirCorreos,
-      TipoNotificacion tipoTicket,
+      TipoNotificacion tipoCorreo,
       Pageable limite);
 }

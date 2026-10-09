@@ -31,7 +31,7 @@ public class PlanificadorNotificaciones {
             List.of(Estado.PENDIENTE, Estado.REINTENTO),
             Instant.now(),
             incluirCorreos,
-            TipoNotificacion.TICKET_TALLER,
+            TipoNotificacion.CORREO,
             PageRequest.of(0, 50))) {
       try {
         procesador.procesar(id);
