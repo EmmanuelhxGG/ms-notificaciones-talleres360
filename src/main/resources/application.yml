@@ -33,6 +33,7 @@ spring:
       mail.smtp.timeout: 5000
       mail.smtp.writetimeout: 5000
   rabbitmq:
+    addresses: ${RABBIT_ADDRESSES:localhost:5672}
     host: ${RABBIT_HOST:localhost}
     port: ${RABBIT_PORT:5672}
     username: ${RABBIT_USERNAME:}
@@ -61,6 +62,7 @@ app:
     enabled: ${RABBIT_ENABLED:false}
     email-queue: ${RABBIT_EMAIL_QUEUE:q.cmd.email}
     workshop-queue: ${RABBIT_WORKSHOP_QUEUE:q.cmd.workshop}
+    invoice-queue: ${RABBIT_INVOICE_QUEUE:q.cmd.invoice}
 ---
 spring:
   config:

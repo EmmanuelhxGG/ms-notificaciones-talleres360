@@ -37,6 +37,7 @@ services:
       SMTP_AUTH: ${SMTP_AUTH:-true}
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       RABBIT_ENABLED: ${RABBIT_ENABLED:-false}
+      RABBIT_ADDRESSES: ${RABBIT_ADDRESSES:-localhost:5672}
       RABBIT_HOST: ${RABBIT_HOST:-localhost}
       RABBIT_PORT: ${RABBIT_PORT:-5672}
       RABBIT_USERNAME: ${RABBIT_USERNAME:-}
@@ -44,6 +45,7 @@ services:
       RABBIT_VHOST: ${RABBIT_VHOST:-/}
       RABBIT_EMAIL_QUEUE: ${RABBIT_EMAIL_QUEUE:-q.cmd.email}
       RABBIT_WORKSHOP_QUEUE: ${RABBIT_WORKSHOP_QUEUE:-q.cmd.workshop}
+      RABBIT_INVOICE_QUEUE: ${RABBIT_INVOICE_QUEUE:-q.cmd.invoice}
     depends_on:
       postgres:
         condition: service_healthy

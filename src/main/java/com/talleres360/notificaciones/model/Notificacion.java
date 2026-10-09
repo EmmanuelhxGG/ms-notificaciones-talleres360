@@ -70,6 +70,10 @@ public class Notificacion implements Persistable<String> {
   @Column(length = 300)
   private String ultimoError;
 
+  @JsonIgnore
+  @Column(name = "comprobante_pdf")
+  private byte[] comprobantePdf;
+
   public enum Estado {
     PENDIENTE,
     REINTENTO,

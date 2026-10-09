@@ -1,0 +1,56 @@
+name: talleres360-mq
+x-rabbit: &rabbit
+  image: rabbitmq:4.3.6-management-alpine
+  restart: unless-stopped
+  mem_limit: 640m
+  environment: &entorno
+    RABBITMQ_ERLANG_COOKIE: ${RABBIT_COOKIE:?Configura RABBIT_COOKIE}
+    RABBITMQ_DEFAULT_USER: ${RABBIT_USERNAME:?Configura RABBIT_USERNAME}
+    RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?Configura RABBIT_PASSWORD}
+    RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2"
+  healthcheck:
+    test: [CMD, rabbitmq-diagnostics, -q, ping]
+    interval: 15s
+    timeout: 10s
+    retries: 20
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "2"}
+services:
+  rabbit1:
+    <<: *rabbit
+    hostname: rabbit1
+    environment:
+      <<: *entorno
+      RABBITMQ_NODENAME: rabbit@rabbit1
+    ports: ["5672:5672", "127.0.0.1:15672:15672"]
+    volumes: ["datos_rabbit1:/var/lib/rabbitmq", "./config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro"]
+  rabbit2:
+    <<: *rabbit
+    hostname: rabbit2
+    environment:
+      <<: *entorno
+      RABBITMQ_NODENAME: rabbit@rabbit2
+    depends_on:
+      rabbit1: {condition: service_healthy}
+    ports: ["5673:5672"]
+    volumes: ["datos_rabbit2:/var/lib/rabbitmq", "./config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro"]
+  administrador:
+    build: ./administrador
+    image: talleres360/administrador-rabbit:local
+    restart: unless-stopped
+    mem_limit: 384m
+    ports: ["8086:8086"]
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Configura INTERNAL_API_KEY}
+      RABBIT_MANAGEMENT_URL: http://rabbit1:15672
+      RABBIT_USERNAME: ${RABBIT_USERNAME}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+    depends_on:
+      rabbit2: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+volumes:
+  datos_rabbit1:
+  datos_rabbit2:

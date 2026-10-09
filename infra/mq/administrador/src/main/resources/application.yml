@@ -1,0 +1,21 @@
+server:
+  port: 8086
+  error:
+    include-message: never
+    include-stacktrace: never
+app:
+  internal-key: ${INTERNAL_API_KEY:}
+  rabbit-url: ${RABBIT_MANAGEMENT_URL:http://rabbit1:15672}
+  rabbit-username: ${RABBIT_USERNAME:}
+  rabbit-password: ${RABBIT_PASSWORD:}
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka1:29092,kafka2:29092,kafka3:29092}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

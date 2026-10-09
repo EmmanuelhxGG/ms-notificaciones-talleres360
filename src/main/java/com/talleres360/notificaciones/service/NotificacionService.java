@@ -67,7 +67,8 @@ public class NotificacionService {
           if (soloTickets)
             condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.TICKET_TALLER));
           if (correo != null) {
-            condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.CORREO));
+            condiciones.add(
+                root.get("tipo").in(TipoNotificacion.CORREO, TipoNotificacion.COMPROBANTE));
             condiciones.add(
                 cb.equal(
                     cb.lower(root.get("destinatario")),

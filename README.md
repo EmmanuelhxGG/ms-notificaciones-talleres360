@@ -2,6 +2,13 @@
 
 Servicio independiente que recibe comandos de notificación, genera tickets de taller y envía correos mediante SMTP. Mantiene su propia base de datos y no modifica órdenes ni stock.
 
+La infraestructura RabbitMQ independiente está en [infra/mq](infra/mq/README.md).
+Con `RABBIT_ENABLED=true` consume tres colas durables: correo, ticket de taller y
+comprobante PDF. Usa ACK/NACK manual, deduplicación por commandId y tres DLQ cuyos
+fallos se conservan en la base de datos. El comprobante de servicio no reemplaza
+una boleta/factura del SII y se descarga mediante
+`GET /api/notifications/{id}/receipt`, previa autorización del BFF y del servicio.
+
 ## Tecnologías
 
 Java 21, Spring Boot 3.5.6, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP, JavaMail y OpenAPI. PostgreSQL en Compose, H2 en memoria para desarrollo y pruebas. También incluye el controlador JDBC y un perfil de conexión Oracle.

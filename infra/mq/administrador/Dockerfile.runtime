@@ -1,0 +1,6 @@
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+RUN addgroup -S app && adduser -S app -G app
+COPY app.jar app.jar
+USER app
+ENTRYPOINT ["java","-XX:MaxRAMPercentage=60","-jar","app.jar"]

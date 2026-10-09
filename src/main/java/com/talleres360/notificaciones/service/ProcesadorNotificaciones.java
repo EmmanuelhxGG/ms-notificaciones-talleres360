@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProcesadorNotificaciones {
   private final NotificacionRepository repository;
   private final JavaMailSender correo;
+  private final GeneradorComprobante comprobantes;
 
   @Value("${app.smtp.enabled:false}")
   private boolean smtpHabilitado;
@@ -43,7 +44,11 @@ public class ProcesadorNotificaciones {
         mensaje.setText(n.getMensaje());
         correo.send(mensaje);
         n.setEstado(Estado.ENVIADA);
-      } else n.setEstado(Estado.GENERADA);
+      } else {
+        if (n.getTipo() == TipoNotificacion.COMPROBANTE)
+          n.setComprobantePdf(comprobantes.generar(n));
+        n.setEstado(Estado.GENERADA);
+      }
       n.setProcesadaEn(Instant.now());
       n.setUltimoError(null);
     } catch (MailException | IllegalStateException error) {
