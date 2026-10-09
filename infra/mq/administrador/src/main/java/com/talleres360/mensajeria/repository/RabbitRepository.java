@@ -45,9 +45,20 @@ public class RabbitRepository {
   }
 
   public void eliminar(String tipo, String nombre) {
+    String condiciones = "?if-unused=true";
+    if (tipo.equals("queues")) {
+      var cola = (Map<?, ?>) listar("queues/%2F/" + nombre);
+      if (!(cola.get("consumers") instanceof Number consumidores)
+          || consumidores.intValue() != 0)
+        throw new IllegalArgumentException("La cola tiene consumidores o no se pudo verificar su uso");
+      // RabbitMQ no admite if-unused al borrar colas quorum. Solo se borran colas demo
+      // vacías, sin consumidores observados; if-empty se comprueba de forma atómica en el broker.
+      condiciones =
+          "?if-empty=true" + ("quorum".equals(cola.get("type")) ? "" : "&if-unused=true");
+    }
     cliente
         .delete()
-        .uri(ruta(tipo + "/%2F/" + nombre + "?if-empty=true&if-unused=true"))
+        .uri(ruta(tipo + "/%2F/" + nombre + condiciones))
         .retrieve()
         .toBodilessEntity();
   }
