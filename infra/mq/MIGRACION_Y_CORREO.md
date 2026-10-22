@@ -17,8 +17,9 @@ motivo; aceptar solo se completa después de confirmar stock. Los tres avisos so
 aceptación, lista para retirar/entregar y rechazo. El comprobante es únicamente
 texto del correo. No se descuenta stock al enviar el carrito.
 
-Kafka, ZooKeeper y su administrador no forman parte de esta nueva versión local.
-Este cambio no implica que se haya apagado o eliminado su EC2 en AWS.
+Kafka, ZooKeeper y su administrador no forman parte de esta versión. El 21 de
+octubre se verificó que los consumidores estaban al día y que las DLT no tenían
+registros disponibles; después se eliminó la EC2 Kafka y su disco con aprobación.
 
 ## Desplegar sin perder datos
 
@@ -105,16 +106,25 @@ Automatic ack retira el mensaje: no usarlo para inspeccionar sin consumir.
 Referencias: [políticas DLX de RabbitMQ](https://www.rabbitmq.com/docs/dlx),
 [registro autoservicio de Entra ID](https://learn.microsoft.com/en-us/entra/external-id/self-service-sign-up-overview).
 
-## Verificación local de este cambio
+## Verificación realizada
 
 Compilaron Órdenes, Reportería, Auditoría, Notificaciones, BFF y administrador
 RabbitMQ. Los seis Compose validaron su estructura con valores ficticios en
 memoria, sin iniciar contenedores. Las pruebas temporales comprobaron reintento
-HTTP, independencia de confirmaciones, NACK/ACK del publicador simulado, ausencia
-de duplicación HTTP/Rabbit, seis colas/tres políticas/nueve enlaces, espera del
-comprobante sin gastar intentos SMTP y correo MIME con PDF adjunto válido.
+HTTP, independencia de confirmaciones y ausencia de duplicación. El flujo completo
+con JWT de prueba comprobó carrito, precios del servidor, aislamiento por cliente,
+stock al aceptar, recuperación tras caída de Catálogo, rechazo con motivo,
+reportería, correo MIME de texto sin adjuntos y reintentos SMTP prolongados.
 
-No se enviaron correos reales, no se probó un broker real en esta intervención,
-no se cambió Azure y no se desplegó ni eliminó ninguna EC2. Varios `.env` locales
-no tienen todas las URL/credenciales necesarias: la validación estructural no
-significa que esos archivos privados estén listos para ejecutar el stack.
+En AWS se actualizaron BFF, los cinco servicios y el administrador RabbitMQ,
+conservando bases, volúmenes y credenciales. Se comprobaron las conexiones
+privadas, seis colas quorum, tres políticas DLX y nueve bindings. Una prueba en
+colas temporales verificó persistencia al reiniciar ambos nodos y rechazo hacia
+DLQ con x-death; las colas temporales se retiraron al finalizar.
+
+Todas las rutas de datos de Gateway mantienen JWT, incluido POST /api/registros.
+El usuario debe autenticarse primero; si no existe en el tenant, requiere invitación
+del administrador. La asignación de Cliente en Entra sigue siendo manual.
+No se enviaron correos reales ni se modificó Azure: SMTP está desactivado hasta
+configurar un remitente autorizado. Las pruebas no sustituyen validar recepción
+real y acceso con una cuenta institucional aprobada.

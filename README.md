@@ -65,7 +65,7 @@ compose.yml        Aplicación y PostgreSQL con volumen independiente.
 2. Se valida y persiste antes de responder. `commandId` es un UUID: repetir el mismo comando no crea otra notificación. Reutilizarlo con contenido distinto se rechaza.
 3. Un proceso periódico selecciona hasta 50 notificaciones y bloquea cada registro durante su procesamiento.
 4. Un ticket termina en `GENERADA`; su contenido queda disponible para consulta. Un correo termina en `ENVIADA` únicamente cuando SMTP acepta el envío.
-5. Los fallos SMTP generan reintentos con espera creciente. Tras cinco intentos el estado es `FALLIDA`. Un administrador puede volver a intentarlo.
+5. Los fallos temporales SMTP generan reintentos con espera creciente, sin abandonar por cantidad de intentos. Los errores definitivos requieren corrección y reintento administrativo.
 
 Con `SMTP_ENABLED=false`, los correos permanecen `PENDIENTE` sin consumir intentos y no bloquean los tickets. SMTP no garantiza entrega en la bandeja del destinatario. Si el proveedor acepta un correo y el proceso cae antes de guardar ese resultado, un reintento puede duplicar el envío: no se afirma entrega exactamente una vez.
 

@@ -53,8 +53,10 @@ DLQ se mantienen detenidos por defecto (`RABBIT_DLQ_AUTO_STARTUP=false`) para
 observar Ready y `x-death` como en la guía. Al activar esa variable guardan el
 fallo en base de datos y confirman: en ese modo la DLQ puede volver a quedar vacía.
 SMTP se procesa por separado: sin un servidor configurado no se afirma que el
-correo fue enviado. Las entregas generan un comprobante PDF de servicio, no un
-documento tributario.
+correo fue enviado. El comprobante nuevo es texto dentro del correo, sin PDF ni
+adjuntos y no es un documento tributario. `q.cmd.invoice` se mantiene por la
+topología de la guía y por compatibilidad histórica, pero las compras nuevas
+no publican comandos para generar documentos.
 
 ## Administración y acceso
 
