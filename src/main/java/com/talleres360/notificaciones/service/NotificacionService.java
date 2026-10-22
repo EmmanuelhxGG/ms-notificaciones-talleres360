@@ -24,7 +24,8 @@ public class NotificacionService {
   public void recibir(ComandoNotificacion input) {
     if (!validator.validate(input).isEmpty()
         || (input.tipo() == TipoNotificacion.CORREO
-            && (input.destinatario() == null || input.destinatario().isBlank())))
+            && (input.destinatario() == null || input.destinatario().isBlank()))
+        || (input.comprobanteId() != null && input.tipo() != TipoNotificacion.CORREO))
       throw new IllegalArgumentException("Comando inválido");
     String identificador = java.util.UUID.fromString(input.commandId()).toString();
     var anterior = repository.findById(identificador);
@@ -35,6 +36,7 @@ public class NotificacionService {
           || !java.util.Objects.equals(n.getDestinatario(), input.destinatario())
           || !n.getAsunto().equals(input.asunto())
           || !n.getMensaje().equals(input.mensaje())
+          || !java.util.Objects.equals(n.getComprobanteId(), normalizar(input.comprobanteId()))
           || !n.getOccurredAt()
               .truncatedTo(java.time.temporal.ChronoUnit.MICROS)
               .equals(input.occurredAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS)))
@@ -48,8 +50,13 @@ public class NotificacionService {
     n.setDestinatario(input.destinatario());
     n.setAsunto(input.asunto());
     n.setMensaje(input.mensaje());
+    n.setComprobanteId(normalizar(input.comprobanteId()));
     n.setOccurredAt(input.occurredAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
     repository.saveAndFlush(n);
+  }
+
+  private static String normalizar(String id) {
+    return id == null ? null : java.util.UUID.fromString(id).toString();
   }
 
   @Transactional(readOnly = true)

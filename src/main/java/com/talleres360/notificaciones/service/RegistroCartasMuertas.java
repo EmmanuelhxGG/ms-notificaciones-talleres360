@@ -22,6 +22,7 @@ public class RegistroCartasMuertas {
 
   @RabbitListener(
       queues = {"q.cmd.email.dlq", "q.cmd.workshop.dlq", "q.cmd.invoice.dlq"},
+      autoStartup = "${app.rabbit.dlq-auto-startup:false}",
       ackMode = "MANUAL")
   public void registrar(Message mensaje, Channel canal) throws java.io.IOException {
     var propiedades = mensaje.getMessageProperties();

@@ -51,7 +51,7 @@ public class Notificacion implements Persistable<String> {
   @Column(nullable = false, length = 180)
   private String asunto;
 
-  @Column(nullable = false, length = 4000)
+  @Column(nullable = false, length = 32000)
   private String mensaje;
 
   @Enumerated(EnumType.STRING)
@@ -73,6 +73,9 @@ public class Notificacion implements Persistable<String> {
   @JsonIgnore
   @Column(name = "comprobante_pdf")
   private byte[] comprobantePdf;
+
+  @Column(length = 36)
+  private String comprobanteId;
 
   public enum Estado {
     PENDIENTE,

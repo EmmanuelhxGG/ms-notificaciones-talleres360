@@ -14,5 +14,7 @@ public record ComandoNotificacion(
     @NotNull TipoNotificacion tipo,
     @Email @Size(max = 150) String destinatario,
     @NotBlank @Size(max = 180) @Pattern(regexp = "^[^\\r\\n]*$") String asunto,
-    @NotBlank @Size(max = 4000) String mensaje,
-    @NotNull Instant occurredAt) {}
+    @NotBlank @Size(max = 32000) String mensaje,
+    @NotNull Instant occurredAt,
+    @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        String comprobanteId) {}

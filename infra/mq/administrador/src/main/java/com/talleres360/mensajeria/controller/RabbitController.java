@@ -33,6 +33,11 @@ public class RabbitController {
     return service.enlaces();
   }
 
+  @GetMapping("/policies")
+  public Object politicas() {
+    return service.politicas();
+  }
+
   @PostMapping("/initialize")
   public void inicializar() {
     service.inicializar();

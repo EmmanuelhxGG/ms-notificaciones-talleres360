@@ -26,11 +26,14 @@ spring:
   mail:
     host: ${SMTP_HOST:localhost}
     port: ${SMTP_PORT:587}
+    default-encoding: UTF-8
     username: ${SMTP_USERNAME:}
     password: ${SMTP_PASSWORD:}
     properties:
       mail.smtp.auth: ${SMTP_AUTH:true}
       mail.smtp.starttls.enable: ${SMTP_STARTTLS:true}
+      mail.smtp.starttls.required: ${SMTP_STARTTLS:true}
+      mail.smtp.ssl.checkserveridentity: true
       mail.smtp.connectiontimeout: 3000
       mail.smtp.timeout: 5000
       mail.smtp.writetimeout: 5000
@@ -62,6 +65,7 @@ app:
     from: ${SMTP_FROM:}
   rabbit:
     enabled: ${RABBIT_ENABLED:false}
+    dlq-auto-startup: ${RABBIT_DLQ_AUTO_STARTUP:false}
     email-queue: ${RABBIT_EMAIL_QUEUE:q.cmd.email}
     workshop-queue: ${RABBIT_WORKSHOP_QUEUE:q.cmd.workshop}
     invoice-queue: ${RABBIT_INVOICE_QUEUE:q.cmd.invoice}

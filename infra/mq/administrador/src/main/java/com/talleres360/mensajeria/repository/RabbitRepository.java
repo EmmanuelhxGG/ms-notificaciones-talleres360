@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.HttpClientErrorException;
 
 @Repository
 public class RabbitRepository {
@@ -35,6 +36,14 @@ public class RabbitRepository {
     cliente.put().uri(ruta(tipo + "/%2F/" + nombre)).body(cuerpo).retrieve().toBodilessEntity();
   }
 
+  public Map<?, ?> buscarCola(String nombre) {
+    try {
+      return cliente.get().uri(ruta("queues/%2F/" + nombre)).retrieve().body(Map.class);
+    } catch (HttpClientErrorException.NotFound ausente) {
+      return null;
+    }
+  }
+
   public void vincular(String exchange, String cola, String clave) {
     cliente
         .post()
@@ -63,6 +72,20 @@ public class RabbitRepository {
         .uri(ruta(tipo + "/%2F/" + nombre + condiciones))
         .retrieve()
         .toBodilessEntity();
+  }
+
+  public void retirarEnlaceAnterior(String exchange, String cola, String clave) {
+    Object respuesta = listar("bindings/%2F/e/" + exchange + "/q/" + cola);
+    if (!(respuesta instanceof java.util.List<?> enlaces))
+      throw new IllegalStateException("No se pudieron comprobar los enlaces anteriores");
+    for (var enlace : enlaces) {
+      if (enlace instanceof Map<?, ?> datos && clave.equals(datos.get("routing_key"))) {
+        String identificador = java.net.URLEncoder.encode(
+            String.valueOf(datos.get("properties_key")), java.nio.charset.StandardCharsets.UTF_8);
+        cliente.delete().uri(ruta("bindings/%2F/e/" + exchange + "/q/" + cola + "/" + identificador))
+            .retrieve().toBodilessEntity();
+      }
+    }
   }
 
   private java.net.URI ruta(String recurso) {

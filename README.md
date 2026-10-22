@@ -4,14 +4,34 @@ Servicio independiente que recibe comandos de notificación, genera tickets de t
 
 La infraestructura RabbitMQ independiente está en [infra/mq](infra/mq/README.md).
 Con `RABBIT_ENABLED=true` consume tres colas durables: correo, ticket de taller y
-comprobante PDF. Usa ACK/NACK manual, deduplicación por commandId y tres DLQ cuyos
-fallos se conservan en la base de datos. El comprobante de servicio no reemplaza
+comprobante histórico. Las solicitudes nuevas usan correo y ticket, sin generar PDF.
+Usa ACK/NACK manual, deduplicación por commandId y tres DLQ cuyos
+mensajes se conservan en las DLQ por defecto. Con `RABBIT_DLQ_AUTO_STARTUP=true`
+se archivan en la base y se confirman. El comprobante de servicio no reemplaza
 una boleta/factura del SII y se descarga mediante
 `GET /api/notifications/{id}/receipt`, previa autorización del BFF y del servicio.
 
 El perfil PostgreSQL incorpora Flyway: adopta la base previa como versión 1 y
 ejecuta `db/migration/postgresql/V2__admitir_comprobantes.sql` para ampliar el CHECK
-de tipos sin borrar datos. H2 y Oracle no ejecutan esa migración PostgreSQL.
+de tipos sin borrar datos. V3 conserva una asociación histórica de comprobantes;
+el flujo nuevo no la utiliza. V4 amplía el mensaje para el detalle del carrito.
+H2 y Oracle no ejecutan esas migraciones PostgreSQL.
+
+El destinatario es el correo asociado al cliente autenticado. El remitente es una
+cuenta de Talleres360 autorizada por su proveedor: no se utilizan contraseñas de
+clientes ni se presume que un usuario Azure tenga buzón. Los correos se envían
+como texto UTF-8 sin adjuntos, sin esperar ni generar PDF. Los documentos históricos
+ya guardados se conservan; no se reenvían automáticamente correos ya enviados.
+SMTP permanece desactivado hasta configurar la cuenta remitente. STARTTLS es
+obligatorio por defecto y se verifica la identidad del servidor TLS.
+
+Las solicitudes nuevas generan tres tipos de correo: aceptación (productos,
+cantidades y monto), lista para retirar/entregar (aviso de disponibilidad) y rechazo
+(motivo obligatorio). Crear o marcar entregada no genera un cuarto correo.
+RabbitMQ confirma el comando después de persistirlo; el worker SMTP conserva en
+base el trabajo pendiente y lo reintenta después de caídas. No promete entrega
+exactamente una vez por SMTP: una caída después del envío y antes del commit puede
+repetirlo. Revisar los avisos históricos antes de activar el remitente real.
 
 ## Tecnologías
 
@@ -116,9 +136,10 @@ La imagen se construye desde este repositorio como `talleres360/ms-notificacione
 | `SMTP_ENABLED` | Activar envíos reales. Desactivado por defecto. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Proveedor de correo y remitente autorizado. |
 | `SMTP_AUTH`, `SMTP_STARTTLS` | Autenticación y STARTTLS; ambos activados por defecto. |
-| `RABBIT_ENABLED` | Activar el consumidor. Desactivado por defecto. |
+| `RABBIT_ENABLED` | Activar las tres colas. `.env.example` lo configura en `true`. |
+| `RABBIT_DLQ_AUTO_STARTUP` | `false` conserva DLQ para inspección manual; `true` archiva y retira esos fallos de las colas. |
 | `RABBIT_HOST`, `RABBIT_PORT`, `RABBIT_USERNAME`, `RABBIT_PASSWORD`, `RABBIT_VHOST` | Conexión al broker. |
-| `RABBIT_EMAIL_QUEUE`, `RABBIT_WORKSHOP_QUEUE` | Colas, por defecto `q.cmd.email` y `q.cmd.workshop`. |
+| `RABBIT_EMAIL_QUEUE`, `RABBIT_WORKSHOP_QUEUE`, `RABBIT_INVOICE_QUEUE` | `q.cmd.email`, `q.cmd.workshop`, `q.cmd.invoice`. |
 | `NOTIFICATIONS_POLL_MS` | Intervalo del proceso periódico, 3000 ms por defecto al ejecutar Java. |
 | `DDL_AUTO` | Gestión de esquema; `update` para este laboratorio. |
 
@@ -128,11 +149,11 @@ El perfil Oracle usa `DB_URL=jdbc:oracle:thin:@//HOST:1521/SERVICIO`, usuario y 
 
 ## RabbitMQ y conexión con el resto del sistema
 
-El consumidor procesa JSON desde las dos colas configuradas y confirma la recepción después de persistir el comando. Los mensajes malformados o mayores de 64 KiB se rechazan. Los errores de procesamiento se reintentan tres veces; el broker necesita una DLQ y un enlace de mensajes rechazados para conservar los fallidos. El servicio no crea colas, exchanges, bindings ni clústeres.
+El consumidor procesa JSON desde las tres colas y confirma después de persistir. Rechaza mensajes malformados o mayores de 64 KiB; reintenta fallos transitorios de base de datos tres veces. La topología DLX/DLQ se configura en `infra/mq`. Fallos SMTP posteriores se reintentan en la base de Notificaciones, no reencolando indefinidamente el comando.
 
 La entrada HTTP interna permite probarlo sin RabbitMQ. No sustituye la integración de mensajería exigida por el caso. El servicio no inventa destinatarios ni recibe tokens Azure del navegador: el BFF valida al usuario y debe colocar los encabezados internos confiables.
 
-API Gateway sigue apuntando al BFF, no directamente a este servicio. Órdenes prepara comandos durables y los envía por HTTP interno conservando el UUID en cada reintento. El BFF expone `GET /api/notifications`, con la identidad derivada del JWT. Configurar `NOTIFICATIONS_URL=http://IP_PRIVADA:8084` en Órdenes y BFF, junto con la misma clave interna de este servicio. El frontend ofrece tickets al Operador y avisos propios al Cliente. No se han creado ni modificado recursos AWS como parte de esta integración.
+API Gateway conserva al BFF como destino. Órdenes usa `MESSAGING_TRANSPORT=rabbit` y conserva UUID y contenido en el outbox. `http` es una alternativa explícita para comandos sin RabbitMQ, nunca simultánea. BFF expone `GET /api/notifications`, con identidad del JWT y `NOTIFICATIONS_URL=http://IP_PRIVADA:8084`. El frontend ofrece tickets al Operador y avisos propios al Cliente. Esta modificación local no crea ni modifica recursos AWS.
 
 ## Seguridad y alcance de las pruebas
 

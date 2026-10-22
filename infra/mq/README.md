@@ -27,22 +27,38 @@ Dockerfile y construir la imagen sin descargar Maven en la EC2.
 | `q.cmd.invoice` | `invoice.gen` | `q.cmd.invoice.dlq` |
 
 `cmd.direct` enruta por coincidencia exacta; `cmd.topic` permite `email.#`,
-`workshop.#` e `invoice.#`; `cmd.dead.dlx` enruta los rechazos. Las seis colas son
-durables de tipo quorum. Las principales usan dead-lettering confirmado.
+`workshop.#` e `invoice.*`; `cmd.dead.dlx` enruta los rechazos. Así, `invoice.gen`
+coincide, pero `invoice.gen.pdf` no. `kitchen` del ejemplo se adapta a `workshop`.
+Se conservan las seis colas quorum durables y la versión RabbitMQ actual, en vez
+de volver a Classic/RabbitMQ 3.13 del laboratorio. No se baja una versión ni se
+reemplaza una cola existente destruyendo mensajes.
+
+El inicializador crea tres políticas `policy.email.dlx`, `policy.workshop.dlx`
+y `policy.invoice.dlx`, con patrones exactos `^q\.cmd\.email$`,
+`^q\.cmd\.workshop$` y `^q\.cmd\.invoice$`. Definen `dead-letter-exchange`,
+`dead-letter-routing-key`, `dead-letter-strategy=at-least-once` y
+`overflow=reject-publish`. No afectan a las DLQ. `GET /policies` permite revisarlas.
+
+Una cola de la versión anterior puede tener argumentos `x-dead-letter-*`:
+prevalecen sobre las políticas. El inicializador comprueba compatibilidad y avisa,
+pero no la borra ni purga. Para dejarla únicamente con políticas hay que detener
+productores, terminar entregas, respaldar y recrear la cola vacía explícitamente.
+La API protege las colas de negocio y no hace ese cambio destructivo por sí sola.
 Órdenes publica mensajes persistentes con confirmación y detección de mensajes
 sin ruta. Solo marca el outbox después de recibir confirmación.
 
 Notificaciones consume las tres principales y confirma ACK después de guardar la
 tarea idempotente. Un comando inválido recibe NACK sin reencolar. Los consumidores
-DLQ guardan el mensaje fallido en su base de datos y luego confirman su recepción;
-por eso una DLQ puede quedar vacía aunque existan fallos registrados.
+DLQ se mantienen detenidos por defecto (`RABBIT_DLQ_AUTO_STARTUP=false`) para
+observar Ready y `x-death` como en la guía. Al activar esa variable guardan el
+fallo en base de datos y confirman: en ese modo la DLQ puede volver a quedar vacía.
 SMTP se procesa por separado: sin un servidor configurado no se afirma que el
 correo fue enviado. Las entregas generan un comprobante PDF de servicio, no un
 documento tributario.
 
 ## Administración y acceso
 
-El administrador ofrece GET `queues`, `exchanges`, `nodes`, `bindings`; POST
+El administrador ofrece GET `queues`, `exchanges`, `nodes`, `bindings`, `policies`; POST
 `queues`, `exchanges`, `bindings`, `initialize`; DELETE `queues/{nombre}` y
 `exchanges/{nombre}`, bajo `/api/messaging/rabbit`. La eliminación se restringe a
 recursos `q.demo.*` y `cmd.demo.*` para proteger las colas de negocio.
