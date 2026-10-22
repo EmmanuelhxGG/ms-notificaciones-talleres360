@@ -33,6 +33,11 @@ base el trabajo pendiente y lo reintenta después de caídas. No promete entrega
 exactamente una vez por SMTP: una caída después del envío y antes del commit puede
 repetirlo. Revisar los avisos históricos antes de activar el remitente real.
 
+Los fallos temporales del proveedor se reintentan sin límite de intentos, con
+espera exponencial limitada a una hora. No se abandonan por una caída prolongada.
+Credenciales rechazadas, direcciones inválidas o contenido mal formado quedan
+FALLIDA para corregirlos y solicitar un reintento administrativo.
+
 ## Tecnologías
 
 Java 21, Spring Boot 3.5.6, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP, JavaMail y OpenAPI. PostgreSQL en Compose, H2 en memoria para desarrollo y pruebas. También incluye el controlador JDBC y un perfil de conexión Oracle.

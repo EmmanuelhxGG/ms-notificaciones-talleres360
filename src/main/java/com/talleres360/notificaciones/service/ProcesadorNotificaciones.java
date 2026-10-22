@@ -7,6 +7,8 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import jakarta.mail.MessagingException;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -51,11 +53,26 @@ public class ProcesadorNotificaciones {
       }
       n.setProcesadaEn(Instant.now());
       n.setUltimoError(null);
-    } catch (MailException | MessagingException | IllegalStateException error) {
-      n.setEstado(n.getIntentos() >= 5 ? Estado.FALLIDA : Estado.REINTENTO);
+    } catch (MailException error) {
+      n.setEstado(errorDefinitivo(error) ? Estado.FALLIDA : Estado.REINTENTO);
       n.setProximoIntento(
           Instant.now().plusSeconds(Math.min(3600, 30L * (1L << Math.min(n.getIntentos(), 7)))));
       n.setUltimoError("No se pudo enviar la notificación. Revisa la configuración del proveedor.");
+    } catch (MessagingException | IllegalStateException error) {
+      n.setEstado(Estado.FALLIDA);
+      n.setUltimoError("Revisa el remitente y los datos del aviso antes de reintentarlo.");
     }
+  }
+
+  private boolean errorDefinitivo(MailException error) {
+    if (error instanceof MailAuthenticationException) return true;
+    if (error instanceof MailSendException envio) {
+      return envio.getFailedMessages().values().stream()
+          .filter(jakarta.mail.SendFailedException.class::isInstance)
+          .map(jakarta.mail.SendFailedException.class::cast)
+          .anyMatch(fallo -> fallo.getInvalidAddresses() != null && fallo.getInvalidAddresses().length > 0);
+    }
+    // Una caída o timeout del proveedor conserva el trabajo, aunque dure más de cinco intentos.
+    return false;
   }
 }
