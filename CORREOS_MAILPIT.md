@@ -40,6 +40,10 @@ publica únicamente en `127.0.0.1:8025`; no requiere abrir un Security Group.
 En PowerShell, reemplazar únicamente la ruta de la llave y la IP pública actual
 de **Notificaciones**. No escribir los caracteres `<` ni `>`.
 
+En Windows también se puede abrir `Abrir-Correos.cmd` e ingresar la IP actual.
+Busca la llave en `Escritorio/llaves pem cloud/ec2-talleres360-notificaciones.pem`.
+Si está en otra carpeta, pasar la IP y la ruta entre comillas como argumentos.
+
 ```powershell
 ssh -i "RUTA_COMPLETA_LLAVE_NOTIFICACIONES.pem" -o ExitOnForwardFailure=yes -N -L 127.0.0.1:8025:127.0.0.1:8025 ec2-user@IP_PUBLICA_NOTIFICACIONES
 ```
