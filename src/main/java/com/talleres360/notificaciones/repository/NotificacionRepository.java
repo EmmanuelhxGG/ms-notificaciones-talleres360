@@ -15,6 +15,9 @@ public interface NotificacionRepository
   @Query("select n from Notificacion n where n.commandId = :id")
   Optional<Notificacion> bloquear(String id);
 
+  boolean existsByOrderIdAndTipoAndEstadoNotAndOccurredAtBefore(
+      Long orderId, TipoNotificacion tipo, Estado estado, Instant occurredAt);
+
   @Query(
       "select n.commandId from Notificacion n where n.estado in :estados and n.proximoIntento <="
           + " :ahora and (:incluirCorreos = true or n.tipo <> :tipoCorreo) order by"

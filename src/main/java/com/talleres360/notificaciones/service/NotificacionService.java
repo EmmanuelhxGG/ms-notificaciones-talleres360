@@ -60,19 +60,19 @@ public class NotificacionService {
   }
 
   @Transactional(readOnly = true)
-  public Page<Notificacion> listar(Long orderId, boolean soloTickets, int pagina, int tamano) {
-    return listar(orderId, soloTickets, null, pagina, tamano);
+  public Page<Notificacion> listar(Long orderId, boolean soloCorreos, int pagina, int tamano) {
+    return listar(orderId, soloCorreos, null, pagina, tamano);
   }
 
   @Transactional(readOnly = true)
   public Page<Notificacion> listar(
-      Long orderId, boolean soloTickets, String correo, int pagina, int tamano) {
+      Long orderId, boolean soloCorreos, String correo, int pagina, int tamano) {
     return repository.findAll(
         (root, query, cb) -> {
           var condiciones = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
           if (orderId != null) condiciones.add(cb.equal(root.get("orderId"), orderId));
-          if (soloTickets)
-            condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.TICKET_TALLER));
+          if (soloCorreos)
+            condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.CORREO));
           if (correo != null) {
             condiciones.add(
                 root.get("tipo").in(TipoNotificacion.CORREO, TipoNotificacion.COMPROBANTE));
