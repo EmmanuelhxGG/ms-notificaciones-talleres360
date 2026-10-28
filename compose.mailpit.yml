@@ -1,0 +1,41 @@
+# Buzón de laboratorio: captura correos, no los entrega a Internet.
+# Usar siempre junto a compose.yml; ver CORREOS_MAILPIT.md.
+services:
+  notificaciones:
+    environment:
+      SMTP_ENABLED: "true"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_AUTH: "false"
+      SMTP_STARTTLS: "false"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: "Operador Talleres360 <operador@talleres360.test>"
+    depends_on:
+      mailpit:
+        condition: service_healthy
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+    environment:
+      TZ: America/Santiago
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: "1000"
+      MP_LABEL: "Talleres360 - buzón de laboratorio"
+      MP_DISABLE_VERSION_CHECK: "true"
+    volumes:
+      - datos_mailpit:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+volumes:
+  datos_mailpit:

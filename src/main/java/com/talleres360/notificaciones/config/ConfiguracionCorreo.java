@@ -19,13 +19,18 @@ public class ConfiguracionCorreo {
   @Value("${spring.mail.password:}")
   private String clave;
 
+  @Value("${spring.mail.properties.mail.smtp.auth:true}")
+  private boolean autenticacion;
+
   @Value("${app.smtp.from:}")
   private String remitente;
 
   @PostConstruct
   void validar() {
     if (!habilitado) return;
-    if (servidor.isBlank() || usuario.isBlank() || clave.isBlank() || remitente.isBlank())
-      throw new IllegalStateException("SMTP_ENABLED requiere servidor, usuario, credencial del proveedor y remitente");
+    if (servidor.isBlank() || remitente.isBlank())
+      throw new IllegalStateException("SMTP_ENABLED requiere servidor y remitente");
+    if (autenticacion && (usuario.isBlank() || clave.isBlank()))
+      throw new IllegalStateException("SMTP_AUTH requiere usuario y credencial del proveedor");
   }
 }
