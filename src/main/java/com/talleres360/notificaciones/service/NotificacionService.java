@@ -1,6 +1,7 @@
 package com.talleres360.notificaciones.service;
 
 import com.talleres360.notificaciones.dto.ComandoNotificacion;
+import com.talleres360.notificaciones.dto.SolicitudNotificaciones;
 import com.talleres360.notificaciones.model.Notificacion;
 import com.talleres360.notificaciones.model.Notificacion.Estado;
 import com.talleres360.notificaciones.model.TipoNotificacion;
@@ -57,6 +58,18 @@ public class NotificacionService {
 
   private static String normalizar(String id) {
     return id == null ? null : java.util.UUID.fromString(id).toString();
+  }
+
+  @Transactional(readOnly=true)
+  public Page<SolicitudNotificaciones> solicitudes(
+      Long orderId, boolean operador, String correo, int pagina, int tamano) {
+    if (!operador && (correo==null || correo.isBlank()))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    return repository.solicitudes(
+        operador ? java.util.List.of(TipoNotificacion.CORREO)
+            : java.util.List.of(TipoNotificacion.CORREO,TipoNotificacion.COMPROBANTE),
+        operador ? null : correo.trim().toLowerCase(java.util.Locale.ROOT),
+        orderId,PageRequest.of(pagina,tamano));
   }
 
   @Transactional(readOnly = true)

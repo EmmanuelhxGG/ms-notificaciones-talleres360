@@ -250,6 +250,14 @@ y envío con una cuenta de demostración autorizada. Los archivos de pruebas no
 forman parte de esta versión. No incluyas contenido de mensajes, destinatarios
 reales, tokens o secretos al publicar evidencias y documentación.
 
+## Avisos agrupados por solicitud
+
+`GET /api/notifications/solicitudes` devuelve `orderId`, `avisos` y
+`ultimaActividad`, agrupando en la base antes de paginar. Admite `orderId`, `page`
+y `size`. Cliente solo obtiene los grupos de su correo autenticado; Operador
+puede consultar el seguimiento de correos. Se conserva el listado de avisos
+`GET /api/notifications?orderId=...` para desplegar el historial de cada grupo.
+
 ## Presentación EP3
 
 Consulta [la demostración de los cinco requisitos](EP3_DEMOSTRACION.md).

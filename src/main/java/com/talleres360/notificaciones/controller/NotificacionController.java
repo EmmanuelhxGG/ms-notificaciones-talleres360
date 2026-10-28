@@ -3,6 +3,7 @@ package com.talleres360.notificaciones.controller;
 import com.talleres360.notificaciones.dto.ComandoNotificacion;
 import com.talleres360.notificaciones.dto.NotificacionVista;
 import com.talleres360.notificaciones.dto.Pagina;
+import com.talleres360.notificaciones.dto.SolicitudNotificaciones;
 import com.talleres360.notificaciones.service.NotificacionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -15,6 +16,18 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class NotificacionController {
   private final NotificacionService service;
+
+  @GetMapping("/api/notifications/solicitudes")
+  public Pagina<SolicitudNotificaciones> solicitudes(
+      @RequestParam(required=false) @Positive Long orderId,
+      @RequestParam(defaultValue="0") @Min(0) int page,
+      @RequestParam(defaultValue="10") @Min(1) @Max(100) int size,
+      @RequestHeader("X-Actor-Role") String role,
+      @RequestHeader(value="X-Customer-Email",required=false) String correo) {
+    if (!role.equals("Operador") && !role.equals("Cliente"))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    return Pagina.desde(service.solicitudes(orderId,role.equals("Operador"),correo,page,size));
+  }
 
   @PostMapping("/internal/commands")
   @ResponseStatus(HttpStatus.ACCEPTED)

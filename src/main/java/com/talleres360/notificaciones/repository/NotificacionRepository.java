@@ -3,14 +3,34 @@ package com.talleres360.notificaciones.repository;
 import com.talleres360.notificaciones.model.Notificacion;
 import com.talleres360.notificaciones.model.Notificacion.Estado;
 import com.talleres360.notificaciones.model.TipoNotificacion;
+import com.talleres360.notificaciones.dto.SolicitudNotificaciones;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.*;
 
 public interface NotificacionRepository
     extends JpaRepository<Notificacion, String>, JpaSpecificationExecutor<Notificacion> {
+  @Query(value="""
+      select new com.talleres360.notificaciones.dto.SolicitudNotificaciones(
+          n.orderId, count(n), max(n.occurredAt))
+      from Notificacion n
+      where n.tipo in :tipos
+        and (:correo is null or lower(n.destinatario) = :correo)
+        and (:orderId is null or n.orderId = :orderId)
+      group by n.orderId
+      order by max(n.occurredAt) desc, n.orderId desc
+      """, countQuery="""
+      select count(distinct n.orderId) from Notificacion n
+      where n.tipo in :tipos
+        and (:correo is null or lower(n.destinatario) = :correo)
+        and (:orderId is null or n.orderId = :orderId)
+      """)
+  Page<SolicitudNotificaciones> solicitudes(
+      Collection<TipoNotificacion> tipos, String correo, Long orderId, Pageable pagina);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select n from Notificacion n where n.commandId = :id")
   Optional<Notificacion> bloquear(String id);
