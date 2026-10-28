@@ -38,7 +38,7 @@ public class Notificacion implements Persistable<String> {
   @Column(length = 36)
   private String commandId;
 
-  @Column(nullable = false)
+  @Column(nullable = true)
   private Long orderId;
 
   @Enumerated(EnumType.STRING)

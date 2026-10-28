@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import com.talleres360.notificaciones.config.TopologiaRabbit;
 import com.talleres360.notificaciones.dto.ComandoNotificacion;
+import com.talleres360.notificaciones.dto.CorreoManual;
 import com.talleres360.notificaciones.service.NotificacionService;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -29,11 +30,17 @@ public class ConsumidorRabbit {
     var p = mensaje.getMessageProperties();
     long entrega = p.getDeliveryTag();
     ComandoNotificacion comando;
+    CorreoManual manual;
     try {
       if (mensaje.getBody().length>65536) throw new IllegalArgumentException("Comando demasiado grande");
-      comando=json.readValue(mensaje.getBody(), ComandoNotificacion.class);
-      if (comando==null || comando.tipo()==null) throw new IllegalArgumentException("Comando sin tipo");
-      if (!topologia.destino(comando.tipo().name()).cola().equals(p.getConsumerQueue()))
+      var contenido=json.readTree(mensaje.getBody());
+      if (contenido == null || !contenido.isObject()) throw new IllegalArgumentException("JSON inválido");
+      boolean sencillo = !contenido.has("tipo") && !contenido.has("commandId") && contenido.has("email");
+      manual = sencillo ? json.treeToValue(contenido, CorreoManual.class) : null;
+      comando = sencillo ? null : json.treeToValue(contenido, ComandoNotificacion.class);
+      if (!sencillo && (comando==null || comando.tipo()==null)) throw new IllegalArgumentException("Comando sin tipo");
+      String tipo = sencillo ? "CORREO" : comando.tipo().name();
+      if (!topologia.destino(tipo).cola().equals(p.getConsumerQueue()))
         throw new IllegalArgumentException("Tipo incompatible con la cola");
     } catch (IOException | IllegalArgumentException error) {
       log.warn("NACK a DLQ: cola={}, motivo={}",p.getConsumerQueue(),error.getClass().getSimpleName());
@@ -43,7 +50,8 @@ public class ConsumidorRabbit {
     try {
       reintentosRabbit.execute(contexto -> {
         // Cada intento usa el proxy: el commit de PostgreSQL termina antes del ACK.
-        service.recibir(comando);
+        if (manual != null) service.recibirManual(manual, p.getMessageId());
+        else service.recibir(comando);
         return null;
       });
     } catch (RuntimeException error) {

@@ -1,6 +1,7 @@
 package com.talleres360.notificaciones.service;
 
 import com.talleres360.notificaciones.dto.ComandoNotificacion;
+import com.talleres360.notificaciones.dto.CorreoManual;
 import com.talleres360.notificaciones.dto.SolicitudNotificaciones;
 import com.talleres360.notificaciones.model.Notificacion;
 import com.talleres360.notificaciones.model.Notificacion.Estado;
@@ -22,8 +23,23 @@ public class NotificacionService {
   private final Validator validator;
 
   @Transactional
+  public void recibirManual(CorreoManual entrada, String mensajeId) {
+    if (!validator.validate(entrada).isEmpty()) throw new IllegalArgumentException("Correo manual inválido");
+    String email = entrada.email().toLowerCase(java.util.Locale.ROOT);
+    // Sin message_id, repetir exactamente los tres campos representa la misma tarea.
+    String identidad = mensajeId == null || mensajeId.isBlank()
+        ? "correo-manual:v1\u0000" + email + "\u0000" + entrada.asunto() + "\u0000" + entrada.mensaje()
+        : "correo-manual-id:v1\u0000" + mensajeId;
+    String id = java.util.UUID.nameUUIDFromBytes(identidad.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    Instant fecha = repository.findById(id).map(Notificacion::getOccurredAt).orElseGet(Instant::now);
+    recibir(new ComandoNotificacion(id, null, TipoNotificacion.CORREO, email,
+        entrada.asunto(), entrada.mensaje(), fecha, null));
+  }
+
+  @Transactional
   public void recibir(ComandoNotificacion input) {
     if (!validator.validate(input).isEmpty()
+        || (input.orderId() == null && input.tipo() != TipoNotificacion.CORREO)
         || (input.tipo() == TipoNotificacion.CORREO
             && (input.destinatario() == null || input.destinatario().isBlank()))
         || (input.comprobanteId() != null && input.tipo() != TipoNotificacion.CORREO))
@@ -32,7 +48,7 @@ public class NotificacionService {
     var anterior = repository.findById(identificador);
     if (anterior.isPresent()) {
       var n = anterior.get();
-      if (!n.getOrderId().equals(input.orderId())
+      if (!java.util.Objects.equals(n.getOrderId(), input.orderId())
           || n.getTipo() != input.tipo()
           || !java.util.Objects.equals(n.getDestinatario(), input.destinatario())
           || !n.getAsunto().equals(input.asunto())
@@ -80,10 +96,17 @@ public class NotificacionService {
   @Transactional(readOnly = true)
   public Page<Notificacion> listar(
       Long orderId, boolean soloCorreos, String correo, int pagina, int tamano) {
+    return listar(orderId, soloCorreos, correo, pagina, tamano, false);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<Notificacion> listar(
+      Long orderId, boolean soloCorreos, String correo, int pagina, int tamano, boolean generales) {
     return repository.findAll(
         (root, query, cb) -> {
           var condiciones = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
           if (orderId != null) condiciones.add(cb.equal(root.get("orderId"), orderId));
+          if (generales) condiciones.add(cb.isNull(root.get("orderId")));
           if (soloCorreos)
             condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.CORREO));
           if (correo != null) {

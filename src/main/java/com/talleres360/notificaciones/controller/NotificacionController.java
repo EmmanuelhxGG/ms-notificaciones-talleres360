@@ -22,11 +22,11 @@ public class NotificacionController {
       @RequestParam(required=false) @Positive Long orderId,
       @RequestParam(defaultValue="0") @Min(0) int page,
       @RequestParam(defaultValue="10") @Min(1) @Max(100) int size,
+      @RequestParam(defaultValue="personal") String ambito,
       @RequestHeader("X-Actor-Role") String role,
       @RequestHeader(value="X-Customer-Email",required=false) String correo) {
-    if (!role.equals("Operador") && !role.equals("Cliente"))
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    return Pagina.desde(service.solicitudes(orderId,role.equals("Operador"),correo,page,size));
+    boolean operativo = validarAmbito(role, ambito, correo);
+    return Pagina.desde(service.solicitudes(orderId, operativo, correo, page, size));
   }
 
   @PostMapping("/internal/commands")
@@ -40,21 +40,35 @@ public class NotificacionController {
       @RequestParam(required = false) @Positive Long orderId,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+      @RequestParam(defaultValue = "personal") String ambito,
+      @RequestParam(defaultValue = "false") boolean generales,
       @RequestHeader("X-Actor-Role") String role,
       @RequestHeader(value = "X-Customer-Email", required = false) String correo) {
-    if (!role.equals("Operador") && !role.equals("Cliente"))
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    if (role.equals("Cliente") && (correo == null || correo.isBlank()))
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    boolean operativo = validarAmbito(role, ambito, correo);
+    if (generales && orderId != null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     return Pagina.desde(
         service
             .listar(
                 orderId,
-                role.equals("Operador"),
-                role.equals("Cliente") ? correo : null,
+                operativo,
+                operativo ? null : correo,
                 page,
-                size)
+                size,
+                generales)
             .map(NotificacionVista::desde));
+  }
+
+  private boolean validarAmbito(String rol, String ambito, String correo) {
+    if (!java.util.Set.of("Admin", "Operador", "Cliente").contains(rol))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    if (!java.util.Set.of("personal", "operativo").contains(ambito))
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    if (ambito.equals("operativo")) {
+      if (!rol.equals("Operador")) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+      return true;
+    }
+    if (correo == null || correo.isBlank()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    return false;
   }
 
   @PostMapping("/api/notifications/{id}/retry")

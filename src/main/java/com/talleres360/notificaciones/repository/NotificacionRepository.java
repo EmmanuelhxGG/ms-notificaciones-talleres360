@@ -23,7 +23,7 @@ public interface NotificacionRepository
       group by n.orderId
       order by max(n.occurredAt) desc, n.orderId desc
       """, countQuery="""
-      select count(distinct n.orderId) from Notificacion n
+      select count(distinct coalesce(n.orderId, -1)) from Notificacion n
       where n.tipo in :tipos
         and (:correo is null or lower(n.destinatario) = :correo)
         and (:orderId is null or n.orderId = :orderId)

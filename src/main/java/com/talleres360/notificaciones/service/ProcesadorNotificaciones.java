@@ -36,7 +36,7 @@ public class ProcesadorNotificaciones {
     // Sin proveedor configurado el correo sigue pendiente, nunca se simula un envío.
     if (n.getTipo() == TipoNotificacion.CORREO && !smtpHabilitado) return;
     // Un retiro no se adelanta a la aceptación si el proveedor está reintentando el aviso anterior.
-    if (n.getTipo() == TipoNotificacion.CORREO
+    if (n.getOrderId() != null && n.getTipo() == TipoNotificacion.CORREO
         && repository.existsByOrderIdAndTipoAndEstadoNotAndOccurredAtBefore(
             n.getOrderId(), TipoNotificacion.CORREO, Estado.ENVIADA, n.getOccurredAt())) return;
     n.setIntentos(n.getIntentos() + 1);

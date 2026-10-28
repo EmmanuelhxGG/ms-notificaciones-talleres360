@@ -1,5 +1,19 @@
 # Talleres360 — Microservicio de notificaciones
 
+## Actualización: JSON directo y bandejas (28-10-2026)
+
+Se admite desde RabbitMQ un JSON con solo `email`, `asunto` y `mensaje` en la cola
+de correo. No requiere pedido: se persiste con `orderId=null` y se muestra en
+Mensajes generales. Véase [publicación desde RabbitMQ](MENSAJES_DESDE_RABBITMQ.md)
+para copiar el JSON y configurar routing key, persistencia y deduplicación.
+
+Todos los roles tienen bandeja personal filtrada por correo confiable del BFF.
+`ambito=personal` es el valor predeterminado; `ambito=operativo` exige Operador.
+`GET /api/notifications?generales=true` devuelve solo avisos sin pedido del ámbito
+autorizado. La agrupación paginada cuenta también el bloque general sin omitirlo.
+La migración PostgreSQL necesaria para una base existente está explicada en la guía.
+
+
 Servicio independiente que recibe comandos de notificación, genera tickets de taller y envía correos mediante SMTP. Mantiene su propia base de datos y no modifica órdenes ni stock.
 
 Para visualizar los correos de laboratorio sin enviarlos a Internet, utiliza
@@ -101,7 +115,7 @@ Puerto predeterminado: **8084**.
 | GET | `/swagger-ui/index.html` | Documentación interactiva. |
 | GET | `/v3/api-docs` | Especificación OpenAPI. |
 
-Las operaciones de negocio requieren `X-Internal-Key`. La consulta requiere `X-Actor-Role`: `Operador` consulta solo tickets; `Cliente` consulta únicamente correos cuyo destinatario coincide con `X-Customer-Email`, obtenido del token por el BFF. Sin identidad del cliente la consulta se rechaza. Admin no consulta notificaciones por esta API. El reintento Admin es una operación interna de mantenimiento y no tiene ruta pública en el BFF. El tamaño máximo de página es 100 y la numeración comienza en 0.
+Las operaciones de negocio requieren `X-Internal-Key`. La consulta requiere `X-Actor-Role`: `Operador` consulta solo tickets; `Cliente` consulta únicamente correos cuyo destinatario coincide con `X-Customer-Email`, obtenido del token por el BFF. Sin identidad del cliente la consulta se rechaza. Admin consulta únicamente su bandeja personal por esta API. El reintento Admin es una operación interna de mantenimiento y no tiene ruta pública en el BFF. El tamaño máximo de página es 100 y la numeración comienza en 0.
 
 La respuesta paginada tiene `content`, `page`, `size`, `totalElements` y `totalPages`. No se exponen entidades JPA directamente.
 
