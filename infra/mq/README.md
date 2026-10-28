@@ -4,6 +4,11 @@ Despliegue independiente para `ec2-talleres360-mq`. No utiliza `ec2-apps`.
 Incluye dos nodos RabbitMQ y un administrador Spring Boot con capas controller,
 service, repository y modelos validados. Requiere Docker Engine, Buildx y Compose.
 
+Documentación actualizada el **22 de octubre de 2026**. La topología se adapta a
+Talleres360, un único taller. RabbitMQ procesa tareas de notificación; stock,
+reportes y auditoría usan el outbox HTTP de Órdenes. Kafka no forma parte de esta
+versión. La imagen de RabbitMQ se fija en `compose.yml`.
+
 ## Configuración
 
 1. Copiar `.env.example` como `.env` en esta carpeta.
@@ -17,6 +22,30 @@ El archivo `.env` es privado y no se versiona. Para discos pequeños existe
 `administrador/Dockerfile.runtime`: compilar el administrador con Java 21/Maven,
 copiar el JAR como `app.jar` a un contexto de construcción separado junto con ese
 Dockerfile y construir la imagen sin descargar Maven en la EC2.
+
+El archivo privado se crea en **`infra/mq/.env`**, junto al Compose de esta carpeta:
+
+```dotenv
+RABBIT_USERNAME=<USUARIO_RABBIT_AUTORIZADO>
+RABBIT_PASSWORD=<CONTRASENA_PRIVADA_RABBIT>
+RABBIT_COOKIE=<COOKIE_ERLANG_PRIVADA_COMPARTIDA>
+INTERNAL_API_KEY=<CLAVE_INTERNA_COMPARTIDA>
+```
+
+Reemplaza los marcadores antes de iniciar. La cookie se comparte solo entre los
+nodos Rabbit; no se copia al frontend. Usuario, contraseña y vhost deben coincidir
+con Órdenes y Notificaciones. En un broker ya inicializado, cambiar `.env` no
+equivale a rotar las credenciales guardadas: no borres sus volúmenes para hacerlo.
+
+Comprueba la instalación desde esta carpeta:
+
+```bash
+docker buildx version
+docker compose version
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
 
 ## Topología
 
@@ -58,6 +87,23 @@ adjuntos y no es un documento tributario. `q.cmd.invoice` se mantiene por la
 topología de la guía y por compatibilidad histórica, pero las compras nuevas
 no publican comandos para generar documentos.
 
+## Flujo y recuperación
+
+```text
+Operador cambia una solicitud
+    → Órdenes guarda evento y comandos en su outbox
+    → publicación persistente con confirmación RabbitMQ
+    → cola durable
+    → Notificaciones guarda la tarea en PostgreSQL y confirma ACK
+    → worker SMTP envía texto o reintenta; el ticket queda consultable
+```
+
+Los correos corresponden a aceptación, solicitud lista para retiro/entrega y
+rechazo con motivo. Si cae el broker, el productor conserva su outbox; si cae el
+consumidor, conserva la cola; después del ACK la recuperación depende de la tarea
+persistida en Notificaciones. Los duplicados de entrega se deduplican por UUID.
+Esto no garantiza exactamente un correo SMTP en todos los fallos posibles.
+
 ## Administración y acceso
 
 El administrador ofrece GET `queues`, `exchanges`, `nodes`, `bindings`, `policies`; POST
@@ -73,6 +119,22 @@ mientras se elimina. Las colas principales y DLQ no se pueden borrar mediante es
 - 8086: permitir únicamente el grupo de seguridad del BFF.
 - 22: permitir únicamente la IP pública del administrador, con máscara `/32`.
 - Management UI: escucha en `127.0.0.1:15672`; acceder mediante túnel SSH.
+
+La aplicación web consume el administrador a través de BFF con rol Admin. Configura
+en BFF `RABBIT_ADMIN_URL=http://<IP_PRIVADA_EC2_RABBIT>:8086`. En Órdenes y
+Notificaciones configura
+`RABBIT_ADDRESSES=<IP_PRIVADA_EC2_RABBIT>:5672,<IP_PRIVADA_EC2_RABBIT>:5673`.
+Son destinos privados: no se agregan al `.env.local` del frontend.
+
+Ejemplo de túnel desde una terminal autorizada, sustituyendo ambos marcadores:
+
+```bash
+ssh -i "<RUTA_A_TU_LLAVE_PEM>" -N -L 15672:127.0.0.1:15672 ec2-user@<DNS_PUBLICO_EC2_RABBIT>
+```
+
+Abre `http://127.0.0.1:15672` e ingresa las credenciales privadas del broker.
+No publiques el puerto Management a Internet. Mantén las llaves PEM fuera del
+repositorio y no copies su contenido, contraseñas, cookies o tokens a este README.
 
 ## Límites del laboratorio
 

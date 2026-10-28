@@ -2,12 +2,27 @@
 
 Servicio independiente que recibe comandos de notificación, genera tickets de taller y envía correos mediante SMTP. Mantiene su propia base de datos y no modifica órdenes ni stock.
 
+Para visualizar los correos de laboratorio sin enviarlos a Internet, utiliza
+[Mailpit y su acceso mediante túnel SSH](CORREOS_MAILPIT.md). La configuración
+`compose.mailpit.yml` captura los avisos en un buzón web persistente. No entrega
+mensajes a Gmail, Outlook ni cuentas institucionales.
+
+Documentación actualizada el **22 de octubre de 2026**. Repositorio independiente,
+rama `emmanuel-noti`, puerto **8084**. Atiende el flujo de Talleres360, un único
+taller. Los ejemplos contienen marcadores y datos ficticios, nunca credenciales
+SMTP, IP reales, IDs de cuenta o identidades privadas.
+
 La infraestructura RabbitMQ independiente está en [infra/mq](infra/mq/README.md).
 Con `RABBIT_ENABLED=true` consume tres colas durables: correo, ticket de taller y
 comprobante histórico. Las solicitudes nuevas usan correo y ticket, sin generar PDF.
-Usa ACK/NACK manual, deduplicación por commandId y tres DLQ cuyos
+Usa ACK `AUTO` del contenedor Spring después del commit de la bandeja durable,
+recibe `byte[]` y deserializa explícitamente con su propio `ObjectMapper`, sin
+convertidor JSON automático en Notify. Un comando inválido lanza una excepción de
+rechazo sin reencolar; las fallas de persistencia pasan por los reintentos del
+contenedor. Mantiene deduplicación por commandId y tres DLQ cuyos
 mensajes se conservan en las DLQ por defecto. Con `RABBIT_DLQ_AUTO_STARTUP=true`
-se archivan en la base y se confirman. El comprobante de servicio no reemplaza
+se archivan en la base y se confirman con ACK manual únicamente en ese consumidor
+de cartas muertas. El comprobante de servicio no reemplaza
 una boleta/factura del SII y se descarga mediante
 `GET /api/notifications/{id}/receipt`, previa autorización del BFF y del servicio.
 
@@ -18,7 +33,8 @@ el flujo nuevo no la utiliza. V4 amplía el mensaje para el detalle del carrito.
 H2 y Oracle no ejecutan esas migraciones PostgreSQL.
 
 El destinatario es el correo asociado al cliente autenticado. El remitente es una
-cuenta de Talleres360 autorizada por su proveedor: no se utilizan contraseñas de
+cuenta del administrador designada por Talleres360 y autorizada por su proveedor:
+no se utilizan contraseñas de
 clientes ni se presume que un usuario Azure tenga buzón. Los correos se envían
 como texto UTF-8 sin adjuntos, sin esperar ni generar PDF. Los documentos históricos
 ya guardados se conservan; no se reenvían automáticamente correos ya enviados.
@@ -88,11 +104,12 @@ Las operaciones de negocio requieren `X-Internal-Key`. La consulta requiere `X-A
 
 La respuesta paginada tiene `content`, `page`, `size`, `totalElements` y `totalPages`. No se exponen entidades JPA directamente.
 
-Ejemplo de comando HTTP o mensaje RabbitMQ:
+Ejemplo de comando HTTP o mensaje RabbitMQ. Sustituye el marcador por un UUID
+válido nuevo para cada tarea; no es una credencial:
 
 ```json
 {
-  "commandId": "6aff7699-5367-42df-9fbc-232de2627c80",
+  "commandId": "<UUID_DEL_COMANDO>",
   "orderId": 15,
   "tipo": "CORREO",
   "destinatario": "cliente@ejemplo.cl",
@@ -104,19 +121,22 @@ Ejemplo de comando HTTP o mensaje RabbitMQ:
 
 Para un ticket usar `"tipo": "TICKET_TALLER"`; el destinatario puede ser `null`. El ticket se relaciona con la orden por `orderId`, no es una orden adicional. El mismo `commandId` se conserva en todos los reintentos del emisor.
 
-## Ejecutar y probar
+## Ejecución local
 
 Requisitos: JDK 21 y conexión para descargar dependencias en la primera ejecución. El repositorio incluye Maven Wrapper.
 
 En PowerShell, desde la carpeta del proyecto:
 
 ```powershell
-$env:INTERNAL_API_KEY='una-clave-interna-larga-para-pruebas-locales'
+$env:INTERNAL_API_KEY='<CLAVE_INTERNA_PRIVADA>'
 .\mvnw.cmd '-DskipTests' package
 .\mvnw.cmd spring-boot:run
 ```
 
-En Linux/macOS, usar `./mvnw` en lugar de `.\mvnw.cmd` y exportar la variable. El perfil `local` usa H2: los datos se pierden al detener la aplicación. Maven no carga `.env` automáticamente; ese archivo lo utiliza Compose.
+Sustituye el marcador antes de ejecutar. En Linux/macOS, usar `./mvnw` en lugar de
+`.\mvnw.cmd` y exportar la variable. El perfil `local` usa H2: los datos se pierden
+al detener la aplicación. Maven no carga `.env` automáticamente; ese archivo lo
+utiliza Compose. Para probar solo HTTP sin broker, usa `RABBIT_ENABLED=false`.
 
 ## Docker Compose independiente
 
@@ -129,6 +149,35 @@ docker compose up -d --build
 ```
 
 La imagen se construye desde este repositorio como `talleres360/ms-notificaciones:local`. PostgreSQL no publica su puerto al host. La aplicación espera a que la base esté disponible y ambos contenedores usan `restart: unless-stopped`; esto requiere que el motor Docker arranque con el equipo. El volumen `talleres360-notificaciones_datos_postgres` conserva los datos.
+
+La configuración privada se guarda en **`.env` en la raíz de este repositorio**,
+junto a `compose.yml`. Plantilla resumida para conexión con los dos nodos:
+
+```dotenv
+DB_USERNAME=<USUARIO_BASE_NOTIFICACIONES>
+DB_PASSWORD=<CONTRASENA_PRIVADA_BASE>
+INTERNAL_API_KEY=<CLAVE_INTERNA_COMPARTIDA>
+RABBIT_ENABLED=true
+RABBIT_ADDRESSES=<HOST_PRIVADO_RABBIT>:5672,<HOST_PRIVADO_RABBIT>:5673
+RABBIT_USERNAME=<USUARIO_RABBIT_AUTORIZADO>
+RABBIT_PASSWORD=<CONTRASENA_PRIVADA_RABBIT>
+RABBIT_VHOST=/
+RABBIT_DLQ_AUTO_STARTUP=false
+SMTP_ENABLED=false
+SMTP_HOST=<HOST_SMTP_DEL_PROVEEDOR>
+SMTP_PORT=587
+SMTP_USERNAME=<CUENTA_AUTORIZADA_DEL_ADMIN>
+SMTP_PASSWORD=<CREDENCIAL_PRIVADA_DEL_PROVEEDOR>
+SMTP_FROM=<REMITENTE_AUTORIZADO_DEL_ADMIN>
+SMTP_AUTH=true
+SMTP_STARTTLS=true
+```
+
+Sustituye los marcadores y ajusta las opciones al proveedor autorizado. Habilita
+`SMTP_ENABLED=true` únicamente después de comprobar el remitente, autenticación,
+conexión TLS y avisos pendientes. El correo del cliente es el **destinatario**;
+su contraseña nunca se solicita. El rol Admin de la aplicación no concede permisos
+SMTP. Las credenciales del remitente solo residen en el servidor de Notificaciones.
 
 ## Configuración
 
@@ -144,13 +193,16 @@ La imagen se construye desde este repositorio como `talleres360/ms-notificacione
 | `RABBIT_ENABLED` | Activar las tres colas. `.env.example` lo configura en `true`. |
 | `RABBIT_DLQ_AUTO_STARTUP` | `false` conserva DLQ para inspección manual; `true` archiva y retira esos fallos de las colas. |
 | `RABBIT_HOST`, `RABBIT_PORT`, `RABBIT_USERNAME`, `RABBIT_PASSWORD`, `RABBIT_VHOST` | Conexión al broker. |
+| `RABBIT_ADDRESSES` | Lista `host:puerto` separada por comas; tiene prioridad sobre host/puerto individuales. Sin prefijo HTTP. |
 | `RABBIT_EMAIL_QUEUE`, `RABBIT_WORKSHOP_QUEUE`, `RABBIT_INVOICE_QUEUE` | `q.cmd.email`, `q.cmd.workshop`, `q.cmd.invoice`. |
 | `NOTIFICATIONS_POLL_MS` | Intervalo del proceso periódico, 3000 ms por defecto al ejecutar Java. |
 | `DDL_AUTO` | Gestión de esquema; `update` para este laboratorio. |
 
 Los chequeos SMTP/Rabbit del endpoint de salud se activan con sus respectivas integraciones. Las opciones avanzadas de Spring pueden configurarse mediante variables de entorno adicionales.
 
-El perfil Oracle usa `DB_URL=jdbc:oracle:thin:@//HOST:1521/SERVICIO`, usuario y contraseña propios. No cambia el Compose PostgreSQL ni convierte datos existentes. La validación automatizada de este repositorio utiliza H2; una base Oracle real requiere su prueba de conexión y esquema.
+El perfil Oracle usa `DB_URL=jdbc:oracle:thin:@//HOST:1521/SERVICIO`, usuario y
+contraseña propios. No cambia el Compose PostgreSQL ni convierte datos existentes.
+Los chequeos locales con H2 no verifican una instalación Oracle real.
 
 ## RabbitMQ y conexión con el resto del sistema
 
@@ -158,10 +210,40 @@ El consumidor procesa JSON desde las tres colas y confirma después de persistir
 
 La entrada HTTP interna permite probarlo sin RabbitMQ. No sustituye la integración de mensajería exigida por el caso. El servicio no inventa destinatarios ni recibe tokens Azure del navegador: el BFF valida al usuario y debe colocar los encabezados internos confiables.
 
-API Gateway conserva al BFF como destino. Órdenes usa `MESSAGING_TRANSPORT=rabbit` y conserva UUID y contenido en el outbox. `http` es una alternativa explícita para comandos sin RabbitMQ, nunca simultánea. BFF expone `GET /api/notifications`, con identidad del JWT y `NOTIFICATIONS_URL=http://IP_PRIVADA:8084`. El frontend ofrece tickets al Operador y avisos propios al Cliente. Esta modificación local no crea ni modifica recursos AWS.
+API Gateway conserva al BFF como destino. Órdenes usa `MESSAGING_TRANSPORT=rabbit`
+y conserva UUID y contenido en el outbox. `http` es una alternativa explícita,
+nunca simultánea. En BFF configura
+`NOTIFICATIONS_URL=http://<IP_PRIVADA_NOTIFICACIONES>:8084`; Órdenes mantiene la
+misma URL para la alternativa HTTP. El frontend ofrece tickets al Operador y
+avisos propios al Cliente. Este servicio no necesita IDs de Entra ni Kafka.
+
+### Conservación ante caídas
+
+Si cae RabbitMQ, el outbox de Órdenes mantiene los comandos sin confirmar. Si cae
+Notificaciones, los mensajes permanecen en las colas durables. Después del ACK,
+la tarea está en PostgreSQL y el proceso SMTP puede retomarla sin depender de que
+el mensaje siga en Rabbit. Los errores transitorios conservan el próximo intento;
+los definitivos se consultan y corrigen antes del reintento administrativo.
+
+Para actualizar el repositorio, verifica primero rama y cambios locales:
+
+```bash
+git pull --ff-only origin emmanuel-noti
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
+
+Conserva los volúmenes de RabbitMQ y PostgreSQL: no uses `docker compose down -v`
+para actualizar. Haz respaldo antes de cambios de esquema. Al actualizar una
+instalación con overrides Compose, conserva sus mismos argumentos `-f` y su `.env`.
 
 ## Seguridad y alcance de las pruebas
 
 No subir `.env`, contraseñas SMTP, claves internas ni archivos PEM. No colocar `X-Internal-Key` en el frontend. Restringir el puerto del microservicio a emisores autorizados y usar TLS cuando la red lo requiera; una clave no cifra HTTP. El servicio confía en el rol transmitido por el BFF junto con la credencial interna, no autentica usuarios Azure por sí mismo.
 
-La revisión local del 8 de octubre verificó validaciones, deduplicación, permisos, tickets, paginación y reintentos con SMTP simulado. No envió correos reales ni verificó un broker o EC2. Los archivos de pruebas no forman parte de esta versión; el empaquetado no sustituye la validación del despliegue.
+Un build correcto o un ACK del broker no prueba recepción de correo en la
+bandeja del cliente. Comprueba por separado persistencia, consumidores, permisos
+y envío con una cuenta de demostración autorizada. Los archivos de pruebas no
+forman parte de esta versión. No incluyas contenido de mensajes, destinatarios
+reales, tokens o secretos al publicar evidencias y documentación.

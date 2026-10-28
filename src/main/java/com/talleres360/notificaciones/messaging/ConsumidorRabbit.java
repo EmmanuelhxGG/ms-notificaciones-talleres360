@@ -1,15 +1,16 @@
 package com.talleres360.notificaciones.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rabbitmq.client.Channel;
 import com.talleres360.notificaciones.dto.ComandoNotificacion;
 import com.talleres360.notificaciones.service.NotificacionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.Message;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -35,44 +36,30 @@ public class ConsumidorRabbit {
         "${app.rabbit.workshop-queue:q.cmd.workshop}",
         "${app.rabbit.invoice-queue:q.cmd.invoice}"
       },
-      ackMode = "MANUAL")
-  public void consumir(Message mensaje, Channel canal) throws java.io.IOException {
-    long entrega = mensaje.getMessageProperties().getDeliveryTag();
+      ackMode = "AUTO")
+  public void consumir(byte[] contenido, @Header(AmqpHeaders.CONSUMER_QUEUE) String cola) {
     try {
-      if (mensaje.getBody().length > 65536)
+      if (contenido.length > 65536)
         throw new IllegalArgumentException("Comando demasiado grande");
-      var comando = json.readValue(mensaje.getBody(), ComandoNotificacion.class);
+      var comando = json.readValue(contenido, ComandoNotificacion.class);
+      if (comando == null || comando.tipo() == null)
+        throw new IllegalArgumentException("Comando sin tipo");
       String esperada =
           switch (comando.tipo()) {
             case CORREO -> colaCorreo;
             case TICKET_TALLER -> colaTaller;
             case COMPROBANTE -> colaComprobante;
           };
-      if (!esperada.equals(mensaje.getMessageProperties().getConsumerQueue()))
+      if (!esperada.equals(cola))
         throw new IllegalArgumentException("Tipo incompatible con la cola");
-      for (int intento = 1; ; intento++) {
-        try {
-          service.recibir(comando);
-          break;
-        } catch (org.springframework.dao.TransientDataAccessException error) {
-          if (intento >= 3) throw error;
-          try {
-            Thread.sleep(500L * intento);
-          } catch (InterruptedException interrumpido) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(interrumpido);
-          }
-        }
-      }
-    } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException error) {
-      log.warn(
-          "Comando rechazado a DLQ en {}: {}",
-          mensaje.getMessageProperties().getConsumerQueue(),
-          error.getClass().getSimpleName());
-      canal.basicNack(entrega, false, false);
-      return;
+      // El proxy transaccional confirma la bandeja durable antes de volver al listener.
+      // Los fallos de BD se propagan al contenedor, que aplica los reintentos configurados.
+      service.recibir(comando);
+    } catch (IllegalArgumentException | java.io.IOException error) {
+      log.warn("Comando rechazado a DLQ en {}: {}", cola, error.getClass().getSimpleName());
+      // Nunca retornar normalmente ante un comando inválido: AUTO lo confirmaría.
+      throw new AmqpRejectAndDontRequeueException("Comando de notificación inválido");
     }
-    // ACK después del commit de la bandeja durable; SMTP se procesa por separado.
-    canal.basicAck(entrega, false);
+    // AUTO: Spring envía ACK solo al retornar correctamente. SMTP se procesa por separado.
   }
 }
