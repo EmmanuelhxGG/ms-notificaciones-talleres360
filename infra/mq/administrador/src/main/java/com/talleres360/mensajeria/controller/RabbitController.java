@@ -45,7 +45,7 @@ public class RabbitController {
 
   @PostMapping("/queues")
   public void crearCola(@Valid @RequestBody Topologia.Cola c) {
-    service.cola(c.nombre(), Map.of("x-queue-type", "quorum", "x-quorum-initial-group-size", 2));
+    service.crearCola(c.nombre());
   }
 
   @PostMapping("/exchanges")
@@ -56,6 +56,11 @@ public class RabbitController {
   @PostMapping("/bindings")
   public void crearEnlace(@Valid @RequestBody Topologia.Enlace e) {
     service.enlace(e);
+  }
+
+  @DeleteMapping("/bindings")
+  public void eliminarEnlace(@Valid @RequestBody Topologia.Enlace e) {
+    service.eliminarEnlace(e);
   }
 
   @DeleteMapping("/queues/{nombre}")

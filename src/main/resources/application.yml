@@ -46,11 +46,11 @@ spring:
     virtual-host: ${RABBIT_VHOST:/}
     listener:
       simple:
-        acknowledge-mode: auto
+        acknowledge-mode: manual
         auto-startup: ${RABBIT_ENABLED:false}
         default-requeue-rejected: false
         retry:
-          enabled: true
+          enabled: false
           max-attempts: 3
           initial-interval: 1000
           multiplier: 2
@@ -66,10 +66,9 @@ app:
     from: ${SMTP_FROM:}
   rabbit:
     enabled: ${RABBIT_ENABLED:false}
-    dlq-auto-startup: ${RABBIT_DLQ_AUTO_STARTUP:false}
-    email-queue: ${RABBIT_EMAIL_QUEUE:q.cmd.email}
-    workshop-queue: ${RABBIT_WORKSHOP_QUEUE:q.cmd.workshop}
-    invoice-queue: ${RABBIT_INVOICE_QUEUE:q.cmd.invoice}
+    dlq-auto-startup: ${RABBIT_DLQ_AUTO_STARTUP:true}
+    intentos: ${RABBIT_RETRY_ATTEMPTS:3}
+    espera-ms: ${RABBIT_RETRY_WAIT_MS:1000}
 ---
 spring:
   config:

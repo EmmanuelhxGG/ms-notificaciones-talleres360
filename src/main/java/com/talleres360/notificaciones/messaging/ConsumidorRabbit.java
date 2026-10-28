@@ -1,65 +1,59 @@
 package com.talleres360.notificaciones.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rabbitmq.client.Channel;
+import com.talleres360.notificaciones.config.TopologiaRabbit;
 import com.talleres360.notificaciones.dto.ComandoNotificacion;
 import com.talleres360.notificaciones.service.NotificacionService;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.AmqpRejectAndDontRequeueException;
-import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "app.rabbit.enabled", havingValue = "true")
+@ConditionalOnProperty(name="app.rabbit.enabled", havingValue="true")
 public class ConsumidorRabbit {
   private final ObjectMapper json;
   private final NotificacionService service;
+  private final TopologiaRabbit topologia;
+  private final RetryTemplate reintentosRabbit;
 
-  @Value("${app.rabbit.email-queue:q.cmd.email}")
-  private String colaCorreo;
-
-  @Value("${app.rabbit.workshop-queue:q.cmd.workshop}")
-  private String colaTaller;
-
-  @Value("${app.rabbit.invoice-queue:q.cmd.invoice}")
-  private String colaComprobante;
-
-  @RabbitListener(
-      queues = {
-        "${app.rabbit.email-queue:q.cmd.email}",
-        "${app.rabbit.workshop-queue:q.cmd.workshop}",
-        "${app.rabbit.invoice-queue:q.cmd.invoice}"
-      },
-      ackMode = "AUTO")
-  public void consumir(byte[] contenido, @Header(AmqpHeaders.CONSUMER_QUEUE) String cola) {
+  @RabbitListener(queues="#{@topologiaRabbit.colas}", ackMode="MANUAL")
+  public void consumir(Message mensaje, Channel canal) throws IOException {
+    var p = mensaje.getMessageProperties();
+    long entrega = p.getDeliveryTag();
+    ComandoNotificacion comando;
     try {
-      if (contenido.length > 65536)
-        throw new IllegalArgumentException("Comando demasiado grande");
-      var comando = json.readValue(contenido, ComandoNotificacion.class);
-      if (comando == null || comando.tipo() == null)
-        throw new IllegalArgumentException("Comando sin tipo");
-      String esperada =
-          switch (comando.tipo()) {
-            case CORREO -> colaCorreo;
-            case TICKET_TALLER -> colaTaller;
-            case COMPROBANTE -> colaComprobante;
-          };
-      if (!esperada.equals(cola))
+      if (mensaje.getBody().length>65536) throw new IllegalArgumentException("Comando demasiado grande");
+      comando=json.readValue(mensaje.getBody(), ComandoNotificacion.class);
+      if (comando==null || comando.tipo()==null) throw new IllegalArgumentException("Comando sin tipo");
+      if (!topologia.destino(comando.tipo().name()).cola().equals(p.getConsumerQueue()))
         throw new IllegalArgumentException("Tipo incompatible con la cola");
-      // El proxy transaccional confirma la bandeja durable antes de volver al listener.
-      // Los fallos de BD se propagan al contenedor, que aplica los reintentos configurados.
-      service.recibir(comando);
-    } catch (IllegalArgumentException | java.io.IOException error) {
-      log.warn("Comando rechazado a DLQ en {}: {}", cola, error.getClass().getSimpleName());
-      // Nunca retornar normalmente ante un comando inválido: AUTO lo confirmaría.
-      throw new AmqpRejectAndDontRequeueException("Comando de notificación inválido");
+    } catch (IOException | IllegalArgumentException error) {
+      log.warn("NACK a DLQ: cola={}, motivo={}",p.getConsumerQueue(),error.getClass().getSimpleName());
+      canal.basicNack(entrega,false,false);
+      return;
     }
-    // AUTO: Spring envía ACK solo al retornar correctamente. SMTP se procesa por separado.
+    try {
+      reintentosRabbit.execute(contexto -> {
+        // Cada intento usa el proxy: el commit de PostgreSQL termina antes del ACK.
+        service.recibir(comando);
+        return null;
+      });
+    } catch (RuntimeException error) {
+      // Datos inválidos no se reintentan; errores de BD tienen reintentos acotados.
+      log.warn("NACK a DLQ tras procesamiento: cola={}, id={}, motivo={}",
+          p.getConsumerQueue(),p.getMessageId(),error.getClass().getSimpleName());
+      canal.basicNack(entrega,false,false);
+      return;
+    }
+    canal.basicAck(entrega,false);
+    log.debug("ACK después de persistir: cola={}, id={}",p.getConsumerQueue(),p.getMessageId());
   }
 }

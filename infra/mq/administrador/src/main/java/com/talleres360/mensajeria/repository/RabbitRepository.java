@@ -81,7 +81,7 @@ public class RabbitRepository {
     for (var enlace : enlaces) {
       if (enlace instanceof Map<?, ?> datos && clave.equals(datos.get("routing_key"))) {
         String identificador = java.net.URLEncoder.encode(
-            String.valueOf(datos.get("properties_key")), java.nio.charset.StandardCharsets.UTF_8);
+            String.valueOf(datos.get("properties_key")), java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         cliente.delete().uri(ruta("bindings/%2F/e/" + exchange + "/q/" + cola + "/" + identificador))
             .retrieve().toBodilessEntity();
       }

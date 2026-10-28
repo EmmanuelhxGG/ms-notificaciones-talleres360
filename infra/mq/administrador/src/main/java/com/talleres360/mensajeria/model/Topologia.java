@@ -12,5 +12,7 @@ public final class Topologia {
       @NotBlank @Pattern(regexp = "direct|topic") String tipo) {}
 
   public record Enlace(
-      @NotBlank String exchange, @NotBlank String cola, @NotBlank @Size(max = 150) String clave) {}
+      @NotBlank @Pattern(regexp="cmd\\.[a-zA-Z0-9._-]{1,90}") String exchange,
+      @NotBlank @Pattern(regexp="q\\.[a-zA-Z0-9._-]{1,90}") String cola,
+      @NotBlank @Size(max = 150) @Pattern(regexp="[a-zA-Z0-9.*#_-]+") String clave) {}
 }

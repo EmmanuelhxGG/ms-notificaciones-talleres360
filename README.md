@@ -15,14 +15,15 @@ SMTP, IP reales, IDs de cuenta o identidades privadas.
 La infraestructura RabbitMQ independiente está en [infra/mq](infra/mq/README.md).
 Con `RABBIT_ENABLED=true` consume tres colas durables: correo, ticket de taller y
 comprobante histórico. Las solicitudes nuevas usan correo y ticket, sin generar PDF.
-Usa ACK `AUTO` del contenedor Spring después del commit de la bandeja durable,
-recibe `byte[]` y deserializa explícitamente con su propio `ObjectMapper`, sin
-convertidor JSON automático en Notify. Un comando inválido lanza una excepción de
-rechazo sin reencolar; las fallas de persistencia pasan por los reintentos del
-contenedor. Mantiene deduplicación por commandId y tres DLQ cuyos
-mensajes se conservan en las DLQ por defecto. Con `RABBIT_DLQ_AUTO_STARTUP=true`
-se archivan en la base y se confirman con ACK manual únicamente en ese consumidor
-de cartas muertas. El comprobante de servicio no reemplaza
+Usa ACK/NACK manual. Recibe `Message` y deserializa su cuerpo con su propio
+`ObjectMapper`, sin confiar en el tipo Java del productor. Confirma con
+`basicAck` únicamente después del commit de la bandeja durable. Los datos
+inválidos reciben `basicNack(requeue=false)`; los errores de persistencia se
+reintentan tres veces con espera exponencial antes de pasar a DLQ.
+Con `RABBIT_DLQ_AUTO_STARTUP=true` (predeterminado), las tres DLQ se archivan en
+`mensajes_fallidos`, se registran en logs y se confirman manualmente después del
+commit. Si falla ese archivo, se reencolan sin borrar el mensaje. Con `false`
+se conservan visibles en RabbitMQ para una inspección manual.  El comprobante de servicio no reemplaza
 una boleta/factura del SII y se descarga mediante
 `GET /api/notifications/{id}/receipt`, previa autorización del BFF y del servicio.
 
@@ -162,7 +163,7 @@ RABBIT_ADDRESSES=<HOST_PRIVADO_RABBIT>:5672,<HOST_PRIVADO_RABBIT>:5673
 RABBIT_USERNAME=<USUARIO_RABBIT_AUTORIZADO>
 RABBIT_PASSWORD=<CONTRASENA_PRIVADA_RABBIT>
 RABBIT_VHOST=/
-RABBIT_DLQ_AUTO_STARTUP=false
+RABBIT_DLQ_AUTO_STARTUP=true
 SMTP_ENABLED=false
 SMTP_HOST=<HOST_SMTP_DEL_PROVEEDOR>
 SMTP_PORT=587
@@ -194,7 +195,8 @@ SMTP. Las credenciales del remitente solo residen en el servidor de Notificacion
 | `RABBIT_DLQ_AUTO_STARTUP` | `false` conserva DLQ para inspección manual; `true` archiva y retira esos fallos de las colas. |
 | `RABBIT_HOST`, `RABBIT_PORT`, `RABBIT_USERNAME`, `RABBIT_PASSWORD`, `RABBIT_VHOST` | Conexión al broker. |
 | `RABBIT_ADDRESSES` | Lista `host:puerto` separada por comas; tiene prioridad sobre host/puerto individuales. Sin prefijo HTTP. |
-| `RABBIT_EMAIL_QUEUE`, `RABBIT_WORKSHOP_QUEUE`, `RABBIT_INVOICE_QUEUE` | `q.cmd.email`, `q.cmd.workshop`, `q.cmd.invoice`. |
+| `app.rabbit.topologia` | Contrato central en `config/TopologiaRabbit.java`: exchanges, colas, rutas y patrones. |
+| `RABBIT_RETRY_ATTEMPTS`, `RABBIT_RETRY_WAIT_MS` | Tres intentos y espera inicial de 1000 ms. |
 | `NOTIFICATIONS_POLL_MS` | Intervalo del proceso periódico, 3000 ms por defecto al ejecutar Java. |
 | `DDL_AUTO` | Gestión de esquema; `update` para este laboratorio. |
 
@@ -247,3 +249,11 @@ bandeja del cliente. Comprueba por separado persistencia, consumidores, permisos
 y envío con una cuenta de demostración autorizada. Los archivos de pruebas no
 forman parte de esta versión. No incluyas contenido de mensajes, destinatarios
 reales, tokens o secretos al publicar evidencias y documentación.
+
+## Presentación EP3
+
+Consulta [la demostración de los cinco requisitos](EP3_DEMOSTRACION.md).
+`DeclaracionTopologiaRabbit` declara seis beans Queue, tres Exchange y nueve
+Binding. Los argumentos coinciden con las colas quorum existentes: no se borran,
+vacían ni recrean para aplicar la configuración. El administrador tiene una
+operación DELETE de bindings para recursos de demostración protegidos.

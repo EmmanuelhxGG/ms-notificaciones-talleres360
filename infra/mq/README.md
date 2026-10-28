@@ -78,9 +78,11 @@ sin ruta. Solo marca el outbox después de recibir confirmación.
 
 Notificaciones consume las tres principales y confirma ACK después de guardar la
 tarea idempotente. Un comando inválido recibe NACK sin reencolar. Los consumidores
-DLQ se mantienen detenidos por defecto (`RABBIT_DLQ_AUTO_STARTUP=false`) para
-observar Ready y `x-death` como en la guía. Al activar esa variable guardan el
-fallo en base de datos y confirman: en ese modo la DLQ puede volver a quedar vacía.
+DLQ están activos por defecto (`RABBIT_DLQ_AUTO_STARTUP=true`): archivan cada
+fallo en PostgreSQL, registran su identificador en logs y realizan ACK manual
+después del commit. La DLQ queda vacía al terminar, pero la evidencia permanece
+en `mensajes_fallidos`. Con `false` se suspende ese archivo para inspeccionarla
+en Management. Si PostgreSQL falla, se reintenta y se reencola la carta muerta.
 SMTP se procesa por separado: sin un servidor configurado no se afirma que el
 correo fue enviado. El comprobante nuevo es texto dentro del correo, sin PDF ni
 adjuntos y no es un documento tributario. `q.cmd.invoice` se mantiene por la
@@ -143,3 +145,15 @@ Un quorum de dos miembros requiere los dos disponibles; no se presenta como alta
 disponibilidad productiva. La alternativa productiva son tres nodos en máquinas
 distintas. El disco es de 8 GB, con volúmenes persistentes y logs rotados; no usar
 `docker compose down -v` si se deben conservar mensajes.
+
+### Configuración central y beans EP3
+
+El contrato de nombres reside en `config/TopologiaRabbit.java`, bajo el prefijo
+`app.rabbit.topologia`, en Órdenes, Notificaciones y el administrador. Los
+publicadores, consumidores y servicios consultan ese contrato. Órdenes y
+Notificaciones declaran beans Queue, Exchange y Binding con los argumentos de
+las colas existentes. No se recrean ni purgan las colas para actualizar.
+
+La configuración AMQP está fuera de los controladores y servicios de negocio.
+El administrador mantiene la capa controller → service → repository para sus
+operaciones REST sobre la Management API. Ver [demostración EP3](../../EP3_DEMOSTRACION.md).

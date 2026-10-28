@@ -2,6 +2,7 @@ package com.talleres360.mensajeria.service;
 
 import com.talleres360.mensajeria.model.Topologia;
 import com.talleres360.mensajeria.repository.RabbitRepository;
+import com.talleres360.mensajeria.config.TopologiaRabbit;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,8 +13,11 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class RabbitService {
   private final RabbitRepository repository;
-  private static final Map<String, String> RUTAS =
-      Map.of("email", "email.send", "workshop", "workshop.ticket", "invoice", "invoice.gen");
+  private final TopologiaRabbit topologia;
+
+  public void crearCola(String nombre) {
+    cola(nombre,topologia.argumentos(topologia.destino("CORREO"),true));
+  }
 
   public Object colas() {
     return repository.listar("queues/%2F");
@@ -64,7 +68,16 @@ public class RabbitService {
   public void enlace(Topologia.Enlace e) {
     validar(e.exchange(), "cmd\\.[a-zA-Z0-9._-]{1,90}");
     validar(e.cola(), "q\\.[a-zA-Z0-9._-]{1,90}");
+    validar(e.clave(), "[a-zA-Z0-9.*#_-]{1,150}");
     repository.vincular(e.exchange(), e.cola(), e.clave());
+  }
+
+  public void eliminarEnlace(Topologia.Enlace e) {
+    // Se protegen los enlaces de negocio; el CRUD de demostración usa recursos aislados.
+    validarDemo(e.exchange(),"cmd.demo.");
+    validarDemo(e.cola(),"q.demo.");
+    validar(e.clave(),"[a-zA-Z0-9.*#_-]{1,150}");
+    repository.retirarEnlaceAnterior(e.exchange(),e.cola(),e.clave());
   }
 
   public void eliminarCola(String nombre) {
@@ -80,39 +93,38 @@ public class RabbitService {
   public void inicializar() {
     if (!(nodos() instanceof List<?> nodos) || nodos.size() != 2)
       throw new IllegalArgumentException("Se requieren dos nodos RabbitMQ activos");
-    exchange(new Topologia.Exchange("cmd.direct", "direct"));
-    exchange(new Topologia.Exchange("cmd.topic", "topic"));
-    exchange(new Topologia.Exchange("cmd.dead.dlx", "direct"));
-    for (var entrada : RUTAS.entrySet()) {
-      String cola = "q.cmd." + entrada.getKey();
-      String ruta = entrada.getValue();
+    exchange(new Topologia.Exchange(topologia.getDirecto(), "direct"));
+    exchange(new Topologia.Exchange(topologia.getTematico(), "topic"));
+    exchange(new Topologia.Exchange(topologia.getMuertas(), "direct"));
+    for (var destino : topologia.getDestinos()) {
+      String cola = destino.cola();
+      String ruta = destino.ruta();
       asegurarCola(cola + ".dlq", null);
       // Política exacta: nunca se aplica a la DLQ ni exige borrar la cola para cambiar DLX.
       repository.guardar(
-          "policies", "policy." + entrada.getKey() + ".dlx",
+          "policies", "policy." + cola.substring(cola.lastIndexOf('.')+1) + ".dlx",
           Map.of(
-              "pattern", "^q\\.cmd\\." + entrada.getKey() + "$",
+              "pattern", "^" + java.util.regex.Pattern.quote(cola) + "$",
               "apply-to", "queues",
               "priority", 0,
               "definition", Map.of(
-                  "dead-letter-exchange", "cmd.dead.dlx",
+                  "dead-letter-exchange", topologia.getMuertas(),
                   "dead-letter-routing-key", ruta,
                   "dead-letter-strategy", "at-least-once",
                   "overflow", "reject-publish")));
       asegurarCola(cola, ruta);
-      enlace(new Topologia.Enlace("cmd.direct", cola, ruta));
-      enlace(new Topologia.Enlace("cmd.topic", cola,
-          entrada.getKey().equals("invoice") ? "invoice.*" : entrada.getKey() + ".#"));
-      if (entrada.getKey().equals("invoice"))
-        repository.retirarEnlaceAnterior("cmd.topic", cola, "invoice.#");
-      enlace(new Topologia.Enlace("cmd.dead.dlx", cola + ".dlq", ruta));
+      enlace(new Topologia.Enlace(topologia.getDirecto(), cola, ruta));
+      enlace(new Topologia.Enlace(topologia.getTematico(), cola, destino.patron()));
+      enlace(new Topologia.Enlace(topologia.getMuertas(), destino.colaMuerta(), ruta));
     }
   }
 
   private void asegurarCola(String nombre, String rutaMuerta) {
     var existente = repository.buscarCola(nombre);
     if (existente == null) {
-      cola(nombre, Map.of("x-queue-type", "quorum", "x-quorum-initial-group-size", 2));
+      var destino=topologia.getDestinos().stream()
+          .filter(d -> d.cola().equals(nombre) || d.colaMuerta().equals(nombre)).findFirst().orElseThrow();
+      cola(nombre,topologia.argumentos(destino,rutaMuerta==null));
       return;
     }
     if (!Boolean.TRUE.equals(existente.get("durable"))
@@ -122,11 +134,10 @@ public class RabbitService {
     if (rutaMuerta != null && existente.get("arguments") instanceof Map<?, ?> argumentos) {
       Object dlx = argumentos.get("x-dead-letter-exchange");
       Object ruta = argumentos.get("x-dead-letter-routing-key");
-      if ((dlx != null && !"cmd.dead.dlx".equals(dlx))
+      if ((dlx != null && !topologia.getMuertas().equals(dlx))
           || (ruta != null && !rutaMuerta.equals(ruta)))
         throw new IllegalStateException("DLX anterior incompatible en " + nombre + "; no se borrará");
-      if (dlx != null || ruta != null)
-        log.warn("{} conserva argumentos DLX anteriores que prevalecen sobre la política; migrar drenando, nunca purgar", nombre);
+      // Los beans de las aplicaciones conservan estos argumentos explícitos.
     }
   }
 
