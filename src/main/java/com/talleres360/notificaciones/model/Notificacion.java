@@ -9,7 +9,7 @@ import org.springframework.data.domain.Persistable;
 @Entity
 @Table(
     name = "notificaciones",
-    indexes = @Index(name = "idx_noti_pendiente", columnList = "estado,proximoIntento"))
+    indexes = @Index(name = "idx_noti_pendiente", columnList = "estado,proximo_intento"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -35,49 +35,49 @@ public class Notificacion implements Persistable<String> {
   }
 
   @Id
-  @Column(length = 36)
+  @Column(name = "comando_id", length = 36)
   private String commandId;
 
-  @Column(nullable = true)
+  @Column(name = "solicitud_id", nullable = true)
   private Long orderId;
 
   @Enumerated(EnumType.STRING)
-  @Column(nullable = false, length = 30)
+  @Column(name = "tipo", nullable = false, length = 30)
   private TipoNotificacion tipo;
 
-  @Column(length = 150)
+  @Column(name = "destinatario", length = 150)
   private String destinatario;
 
-  @Column(nullable = false, length = 180)
+  @Column(name = "asunto", nullable = false, length = 180)
   private String asunto;
 
-  @Column(nullable = false, length = 32000)
+  @Column(name = "mensaje", nullable = false, length = 32000)
   private String mensaje;
 
   @Enumerated(EnumType.STRING)
-  @Column(nullable = false, length = 20)
+  @Column(name = "estado", nullable = false, length = 20)
   private Estado estado = Estado.PENDIENTE;
 
-  @Column(nullable = false)
+  @Column(name = "ocurrido_en", nullable = false)
   private Instant occurredAt;
 
-  @Column(nullable = false)
+  @Column(name = "proximo_intento", nullable = false)
   private Instant proximoIntento = Instant.now();
 
-  private Instant procesadaEn;
-  private int intentos;
+  @Column(name = "procesada_en") private Instant procesadaEn;
+  @Column(name = "intentos") private int intentos;
 
-  @Column(length = 300)
+  @Column(name = "ultimo_error", length = 300)
   private String ultimoError;
 
   // Outbox de fallos definitivos: se confirma solo después de persistir en RabbitMQ.
-  private Boolean falloPublicado = false;
+  @Column(name = "fallo_publicado") private Boolean falloPublicado = false;
 
   @JsonIgnore
   @Column(name = "comprobante_pdf")
   private byte[] comprobantePdf;
 
-  @Column(length = 36)
+  @Column(name = "comprobante_id", length = 36)
   private String comprobanteId;
 
   public enum Estado {

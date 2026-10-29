@@ -11,21 +11,21 @@ import lombok.*;
 @NoArgsConstructor
 public class MensajeFallido {
   @Id
-  @Column(length = 36)
+  @Column(name = "id", length = 36)
   private String id;
 
-  @Column(nullable = false, length = 100)
+  @Column(name = "cola", nullable = false, length = 100)
   private String cola;
 
-  @Column(length = 160)
+  @Column(name = "mensaje_id", length = 160)
   private String mensajeId;
 
-  @Column(nullable = false, length = 65536)
+  @Column(name = "contenido", nullable = false, length = 65536)
   private String contenido;
 
-  @Column(nullable = false, length = 500)
+  @Column(name = "motivo", nullable = false, length = 500)
   private String motivo;
 
-  @Column(nullable = false)
+  @Column(name = "recibido_en", nullable = false)
   private Instant recibidoEn;
 }
