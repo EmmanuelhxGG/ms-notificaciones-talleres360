@@ -32,4 +32,5 @@ services:
       RABBIT_USERNAME: ${RABBIT_USERNAME:-}
       RABBIT_PASSWORD: ${RABBIT_PASSWORD:-}
       RABBIT_VHOST: ${RABBIT_VHOST:-/}
+    mem_limit: 512m
     restart: unless-stopped
