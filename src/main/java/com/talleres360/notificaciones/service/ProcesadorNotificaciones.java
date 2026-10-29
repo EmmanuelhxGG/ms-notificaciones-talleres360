@@ -49,6 +49,9 @@ public class ProcesadorNotificaciones {
         contenido.setTo(n.getDestinatario());
         contenido.setSubject(n.getAsunto());
         contenido.setText(n.getMensaje(), false);
+        // Identidad estable también en SMTP. Facilita rastrear reintentos; SMTP no garantiza deduplicación.
+        mensaje.setHeader("Message-ID", "<" + n.getCommandId() + "@talleres360.local>");
+        mensaje.setHeader("X-Talleres360-Comando", n.getCommandId());
         correo.send(mensaje);
         n.setEstado(Estado.ENVIADA);
       } else {

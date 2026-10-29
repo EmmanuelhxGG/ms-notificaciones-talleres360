@@ -1,5 +1,23 @@
 # Talleres360 — Microservicio de notificaciones
 
+## Recuperación, DLQ y comprobante de texto
+
+Órdenes conserva los comandos en su outbox PostgreSQL hasta recibir confirmación
+de RabbitMQ. El consumidor guarda el comando antes del ACK y deduplica por
+`commandId`. Una redelivery no crea otra notificación. El envío SMTP usa un
+`Message-ID` estable para rastrear reintentos; eso no convierte SMTP en entrega
+exactamente una vez ante una caída posterior al envío y anterior al commit.
+
+JSON inválido o procesamiento rechazado sin reencolar pasa a su DLQ. Los fallos
+definitivos de envío también se publican a la DLQ con confirmación y outbox en
+PostgreSQL (`falloPublicado`, migración V5). Las caídas temporales del proveedor
+mantienen `REINTENTO`; una caída de RabbitMQ mantiene pendiente la publicación.
+No se envía a DLQ por eliminar productos, purgar colas o eliminar una cola.
+
+Al entregar se genera un comando `COMPROBANTE` en `q.cmd.invoice`: texto UTF-8
+con productos, cantidades y total. Se ve en Notificaciones y se descarga como
+`.txt`; no genera otro correo ni PDF. Es un comprobante interno, no tributario.
+
 ## Actualización: JSON directo y bandejas (28-10-2026)
 
 Se admite desde RabbitMQ un JSON con solo `email`, `asunto` y `mensaje` en la cola
@@ -28,16 +46,17 @@ SMTP, IP reales, IDs de cuenta o identidades privadas.
 
 La infraestructura RabbitMQ independiente está en [infra/mq](infra/mq/README.md).
 Con `RABBIT_ENABLED=true` consume tres colas durables: correo, ticket de taller y
-comprobante histórico. Las solicitudes nuevas usan correo y ticket, sin generar PDF.
+comprobante de entrega. Las solicitudes nuevas usan correo y ticket; al entregar
+se genera un comprobante de texto, sin PDF.
 Usa ACK/NACK manual. Recibe `Message` y deserializa su cuerpo con su propio
 `ObjectMapper`, sin confiar en el tipo Java del productor. Confirma con
 `basicAck` únicamente después del commit de la bandeja durable. Los datos
 inválidos reciben `basicNack(requeue=false)`; los errores de persistencia se
 reintentan tres veces con espera exponencial antes de pasar a DLQ.
-Con `RABBIT_DLQ_AUTO_STARTUP=true` (predeterminado), las tres DLQ se archivan en
+Con `RABBIT_DLQ_AUTO_STARTUP=true` (opcional), las tres DLQ se archivan en
 `mensajes_fallidos`, se registran en logs y se confirman manualmente después del
 commit. Si falla ese archivo, se reencolan sin borrar el mensaje. Con `false`
-se conservan visibles en RabbitMQ para una inspección manual.  El comprobante de servicio no reemplaza
+se conservan visibles en RabbitMQ para una inspección manual (predeterminado). El comprobante de servicio no reemplaza
 una boleta/factura del SII y se descarga mediante
 `GET /api/notifications/{id}/receipt`, previa autorización del BFF y del servicio.
 
@@ -177,7 +196,7 @@ RABBIT_ADDRESSES=<HOST_PRIVADO_RABBIT>:5672,<HOST_PRIVADO_RABBIT>:5673
 RABBIT_USERNAME=<USUARIO_RABBIT_AUTORIZADO>
 RABBIT_PASSWORD=<CONTRASENA_PRIVADA_RABBIT>
 RABBIT_VHOST=/
-RABBIT_DLQ_AUTO_STARTUP=true
+RABBIT_DLQ_AUTO_STARTUP=false
 SMTP_ENABLED=false
 SMTP_HOST=<HOST_SMTP_DEL_PROVEEDOR>
 SMTP_PORT=587

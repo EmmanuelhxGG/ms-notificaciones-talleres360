@@ -1,5 +1,23 @@
 # RabbitMQ de Talleres360
 
+## Qué ocurre ante fallos
+
+El productor es Órdenes; Notificaciones es el consumidor. Los publisher confirms
+confirman que RabbitMQ aceptó la publicación; el ACK manual del consumidor se
+envía después de persistir el comando. No son mensajes de negocio en sentido inverso.
+Si el broker está caído, el outbox PostgreSQL conserva la tarea para reintentar.
+Las redeliveries conservan el identificador y se deduplican en Notificaciones.
+
+Un JSON inválido o un rechazo con `requeue=false` pasa al DLX y a la DLQ asociada.
+Los fallos definitivos de envío también se publican allí, con confirmación.
+Una caída temporal del proveedor mantiene el reintento; no se descarta el aviso.
+`RABBIT_DLQ_AUTO_STARTUP=false` deja los fallos visibles en Management.
+Purgar/eliminar una cola o eliminar un producto no envía sus datos a DLQ.
+
+Los dos nodos comparten una EC2. Un quorum de dos necesita ambos miembros:
+una caída detiene la disponibilidad hasta recuperar el clúster y sus discos.
+Tres nodos en EC2 distintas tolerarían la caída de uno, con mayor coste.
+
 Despliegue independiente para `ec2-talleres360-mq`. No utiliza `ec2-apps`.
 Incluye dos nodos RabbitMQ y un administrador Spring Boot con capas controller,
 service, repository y modelos validados. Requiere Docker Engine, Buildx y Compose.

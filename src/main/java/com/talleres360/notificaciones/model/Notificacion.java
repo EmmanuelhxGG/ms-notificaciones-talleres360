@@ -70,6 +70,9 @@ public class Notificacion implements Persistable<String> {
   @Column(length = 300)
   private String ultimoError;
 
+  // Outbox de fallos definitivos: se confirma solo después de persistir en RabbitMQ.
+  private Boolean falloPublicado = false;
+
   @JsonIgnore
   @Column(name = "comprobante_pdf")
   private byte[] comprobantePdf;

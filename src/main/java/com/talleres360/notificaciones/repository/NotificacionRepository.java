@@ -35,6 +35,14 @@ public interface NotificacionRepository
   @Query("select n from Notificacion n where n.commandId = :id")
   Optional<Notificacion> bloquear(String id);
 
+  @Query("select n from Notificacion n where n.estado = :estado and coalesce(n.falloPublicado, false) = false order by n.occurredAt")
+  List<Notificacion> fallosPendientes(Estado estado, Pageable limite);
+
+  @org.springframework.transaction.annotation.Transactional
+  @Modifying
+  @Query("update Notificacion n set n.falloPublicado = true where n.commandId = :id and n.estado = :estado")
+  int confirmarFallo(String id, Estado estado);
+
   boolean existsByOrderIdAndTipoAndEstadoNotAndOccurredAtBefore(
       Long orderId, TipoNotificacion tipo, Estado estado, Instant occurredAt);
 

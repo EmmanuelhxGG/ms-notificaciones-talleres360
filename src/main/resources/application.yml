@@ -44,9 +44,14 @@ spring:
     username: ${RABBIT_USERNAME:}
     password: ${RABBIT_PASSWORD:}
     virtual-host: ${RABBIT_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     listener:
       simple:
         acknowledge-mode: manual
+        prefetch: 10
         auto-startup: ${RABBIT_ENABLED:false}
         default-requeue-rejected: false
         retry:
@@ -66,7 +71,7 @@ app:
     from: ${SMTP_FROM:}
   rabbit:
     enabled: ${RABBIT_ENABLED:false}
-    dlq-auto-startup: ${RABBIT_DLQ_AUTO_STARTUP:true}
+    dlq-auto-startup: ${RABBIT_DLQ_AUTO_STARTUP:false}
     intentos: ${RABBIT_RETRY_ATTEMPTS:3}
     espera-ms: ${RABBIT_RETRY_WAIT_MS:1000}
 ---

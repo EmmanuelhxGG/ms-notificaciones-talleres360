@@ -27,14 +27,15 @@ public class ComprobanteController {
             && correo != null
             && correo.equalsIgnoreCase(n.getDestinatario()))))
       throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    if (n.getTipo() != TipoNotificacion.COMPROBANTE || n.getComprobantePdf() == null)
+    if (n.getTipo() != TipoNotificacion.COMPROBANTE
+        || n.getEstado() != com.talleres360.notificaciones.model.Notificacion.Estado.GENERADA)
       throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     return ResponseEntity.ok()
-        .contentType(MediaType.APPLICATION_PDF)
+        .contentType(new MediaType("text", "plain", java.nio.charset.StandardCharsets.UTF_8))
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
-            "attachment; filename=comprobante-" + n.getOrderId() + ".pdf")
+            "attachment; filename=comprobante-" + n.getOrderId() + ".txt")
         .cacheControl(CacheControl.noStore())
-        .body(n.getComprobantePdf());
+        .body(n.getMensaje().getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 }

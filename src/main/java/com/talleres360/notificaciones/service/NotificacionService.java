@@ -139,5 +139,6 @@ public class NotificacionService {
     n.setIntentos(0);
     n.setProximoIntento(Instant.now());
     n.setUltimoError(null);
+    n.setFalloPublicado(false);
   }
 }

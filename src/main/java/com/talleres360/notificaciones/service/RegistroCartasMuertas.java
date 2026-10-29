@@ -19,7 +19,7 @@ public class RegistroCartasMuertas {
   private final RetryTemplate reintentosRabbit;
 
   @RabbitListener(queues="#{@topologiaRabbit.colasMuertas}",
-      autoStartup="${app.rabbit.dlq-auto-startup:true}", ackMode="MANUAL")
+      autoStartup="${app.rabbit.dlq-auto-startup:false}", ackMode="MANUAL")
   public void registrar(Message mensaje, Channel canal) throws IOException {
     String id;
     try {
