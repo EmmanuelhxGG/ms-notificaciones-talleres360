@@ -26,7 +26,7 @@ public class NotificacionController {
       @RequestHeader("X-Actor-Role") String role,
       @RequestHeader(value="X-Customer-Email",required=false) String correo) {
     boolean operativo = validarAmbito(role, ambito, correo);
-    return Pagina.desde(service.solicitudes(orderId, operativo, correo, page, size));
+    return Pagina.desde(service.solicitudes(orderId, operativo, correo, page, size, "taller".equals(ambito)));
   }
 
   @PostMapping("/internal/commands")
@@ -51,18 +51,23 @@ public class NotificacionController {
             .listar(
                 orderId,
                 operativo,
-                operativo ? null : correo,
+                operativo || "taller".equals(ambito) ? null : correo,
                 page,
                 size,
-                generales)
+                generales, "taller".equals(ambito))
             .map(NotificacionVista::desde));
   }
 
   private boolean validarAmbito(String rol, String ambito, String correo) {
     if (!java.util.Set.of("Admin", "Operador", "Cliente").contains(rol))
       throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    if (!java.util.Set.of("personal", "operativo").contains(ambito))
+    if (!java.util.Set.of("personal", "operativo", "taller").contains(ambito))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    if (ambito.equals("taller")) {
+      if (!java.util.Set.of("Admin", "Operador").contains(rol))
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+      return false;
+    }
     if (ambito.equals("operativo")) {
       if (!rol.equals("Operador")) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
       return true;

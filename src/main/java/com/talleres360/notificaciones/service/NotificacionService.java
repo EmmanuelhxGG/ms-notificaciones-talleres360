@@ -78,13 +78,14 @@ public class NotificacionService {
 
   @Transactional(readOnly=true)
   public Page<SolicitudNotificaciones> solicitudes(
-      Long orderId, boolean operador, String correo, int pagina, int tamano) {
-    if (!operador && (correo==null || correo.isBlank()))
+      Long orderId, boolean operador, String correo, int pagina, int tamano, boolean taller) {
+    if (!operador && !taller && (correo==null || correo.isBlank()))
       throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     return repository.solicitudes(
-        operador ? java.util.List.of(TipoNotificacion.CORREO)
+        taller ? java.util.List.of(TipoNotificacion.TICKET_TALLER)
+            : operador ? java.util.List.of(TipoNotificacion.CORREO)
             : java.util.List.of(TipoNotificacion.CORREO,TipoNotificacion.COMPROBANTE),
-        operador ? null : correo.trim().toLowerCase(java.util.Locale.ROOT),
+        operador || taller ? null : correo.trim().toLowerCase(java.util.Locale.ROOT),
         orderId,PageRequest.of(pagina,tamano));
   }
 
@@ -102,11 +103,19 @@ public class NotificacionService {
   @Transactional(readOnly = true)
   public Page<Notificacion> listar(
       Long orderId, boolean soloCorreos, String correo, int pagina, int tamano, boolean generales) {
+    return listar(orderId, soloCorreos, correo, pagina, tamano, generales, false);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<Notificacion> listar(
+      Long orderId, boolean soloCorreos, String correo, int pagina, int tamano,
+      boolean generales, boolean taller) {
     return repository.findAll(
         (root, query, cb) -> {
           var condiciones = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
           if (orderId != null) condiciones.add(cb.equal(root.get("orderId"), orderId));
           if (generales) condiciones.add(cb.isNull(root.get("orderId")));
+          if (taller) condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.TICKET_TALLER));
           if (soloCorreos)
             condiciones.add(cb.equal(root.get("tipo"), TipoNotificacion.CORREO));
           if (correo != null) {
